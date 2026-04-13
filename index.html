@@ -1193,6 +1193,16 @@ function getStockUSLots(){
   });
   return Object.values(map).map(s=>({...s,avgCostUSD:s.qty?+(s.totalCostUSD/s.qty).toFixed(2):0}));
 }
+function addCoin(){
+  const tk=(document.getElementById('new-coin-ticker').value||'').trim().toUpperCase();
+  const qty=+(document.getElementById('new-coin-qty').value)||0;
+  const cost=+(document.getElementById('new-coin-cost').value)||0;
+  if(!tk||!qty)return;
+  S.coins.push({ticker:tk,qty,cost});
+  save();
+  ['new-coin-ticker','new-coin-qty','new-coin-cost'].forEach(id=>{document.getElementById(id).value='';});
+  renderAssetsPage();fetchAll();
+}
 function addStockKR(){
   const tk=(document.getElementById('new-stock-kr-ticker').value||'').trim().toUpperCase();
   const qty=+(document.getElementById('new-stock-kr-qty').value)||0;
