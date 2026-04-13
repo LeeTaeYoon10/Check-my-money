@@ -591,7 +591,7 @@
       <div class="card-title">코인 <span class="badge badge-live"><span class="live-dot"></span>업비트 실시간</span></div>
       <div class="note" style="margin-bottom:10px;">티커 입력 (예: BTC, ETH, XRP)</div>
       <div id="coin-inputs"></div>
-      <div class="coin-row" style="margin-top:6px;"><input type="text" id="new-coin-ticker" placeholder="티커" style="max-width:80px;text-transform:uppercase;"><input type="number" id="new-coin-qty" placeholder="보유수량"><input type="number" id="new-coin-cost" placeholder="매수원금(원)"><button class="btn-add" onclick="addCoin()">추가</button></div>
+      <div class="coin-row" style="margin-top:6px;"><input type="text" id="new-coin-ticker" placeholder="티커" style="max-width:80px;text-transform:uppercase;"><input type="number" id="new-coin-qty" placeholder="보유수량"><input type="number" id="new-coin-cost" placeholder="매수원가 (1개 가격, 원)"><button class="btn-add" onclick="addCoin()">추가</button></div>
     </div>
 
     <!-- 국내주식 — 같은 종목 매입 건별 합산 -->
@@ -761,8 +761,20 @@ let pendingExpense=null;
 function save(){localStorage.setItem('assetMgrPro4',JSON.stringify(S));}
 function fmt(n){
   const abs=Math.abs(n),sign=n<0?'-':'';
-  if(abs>=100000000)return sign+(abs/100000000).toFixed(1)+'억원';
-  if(abs>=10000)return sign+Math.round(abs/10000).toLocaleString()+'만원';
+  if(abs>=100000000){
+    const uk=Math.floor(abs/100000000);
+    const man=Math.round((abs%100000000)/10000);
+    return sign+uk.toLocaleString()+'억'+(man>0?man.toLocaleString()+'만':'')+'원';
+  }
+  if(abs>=10000){
+    const man=Math.round(abs/10000);
+    return sign+man.toLocaleString()+'만원';
+  }
+  return sign+Math.round(abs).toLocaleString()+'원';
+}
+function fmtFull(n){
+  // 원 단위 그대로 쉼표 표기 (예: 3,800,000원)
+  const abs=Math.abs(n),sign=n<0?'-':'';
   return sign+Math.round(abs).toLocaleString()+'원';
 }
 function ymLabel(ym){const[y,m]=ym.split('-');return `${y}년 ${parseInt(m)}월`;}
@@ -1196,9 +1208,10 @@ function getStockUSLots(){
 function addCoin(){
   const tk=(document.getElementById('new-coin-ticker').value||'').trim().toUpperCase();
   const qty=+(document.getElementById('new-coin-qty').value)||0;
-  const cost=+(document.getElementById('new-coin-cost').value)||0;
+  const costPerCoin=+(document.getElementById('new-coin-cost').value)||0;
   if(!tk||!qty)return;
-  S.coins.push({ticker:tk,qty,cost});
+  // 기존 데이터 호환: cost → costPerCoin으로 저장
+  S.coins.push({ticker:tk,qty,costPerCoin});
   save();
   ['new-coin-ticker','new-coin-qty','new-coin-cost'].forEach(id=>{document.getElementById(id).value='';});
   renderAssetsPage();fetchAll();
@@ -1330,7 +1343,15 @@ function renderAssetsPage(){
   updateGoldInfo();
 
   // 코인
-  document.getElementById('coin-inputs').innerHTML=S.coins.map((c,i)=>`<div class="coin-row"><input type="text" value="${c.ticker.toUpperCase()}" style="max-width:76px;" onchange="S.coins[${i}].ticker=this.value.toUpperCase();save();"><input type="number" value="${c.qty}" onchange="S.coins[${i}].qty=+this.value;save();"><input type="number" value="${c.cost}" onchange="S.coins[${i}].cost=+this.value;save();"><button class="del-btn" onclick="S.coins.splice(${i},1);save();renderAssetsPage();">✕</button></div>`).join('');
+  document.getElementById('coin-inputs').innerHTML=S.coins.map((c,i)=>{
+    const cpc=c.costPerCoin!==undefined?c.costPerCoin:(c.cost&&c.qty?Math.round(c.cost/c.qty):0);
+    return `<div class="coin-row">
+      <input type="text" value="${c.ticker.toUpperCase()}" style="max-width:76px;" onchange="S.coins[${i}].ticker=this.value.toUpperCase();save();">
+      <input type="number" value="${c.qty}" placeholder="수량" onchange="S.coins[${i}].qty=+this.value;save();">
+      <input type="number" value="${cpc}" placeholder="1개 가격(원)" onchange="S.coins[${i}].costPerCoin=+this.value;save();">
+      <button class="del-btn" onclick="S.coins.splice(${i},1);save();renderAssetsPage();">✕</button>
+    </div>`;
+  }).join('');
 
   // 국내주식 — 로트별 목록
   const krLots=getStockKRLots();
@@ -1466,18 +1487,64 @@ const PENSION_TYPE_COLOR={national:'#378ADD',private:'#7F77DD',irp:'#1D9E75'};
 /* ── 시세 ─────────────────────────── */
 function setStatus(ok,msg){const dot=document.getElementById('status-dot'),txt=document.getElementById('status-text');if(dot)dot.style.background=ok===true?'#1D9E75':ok===false?'#E24B4A':'#BA7517';if(txt)txt.textContent=msg;}
 async function fetchUpbit(){if(!S.coins.length)return false;try{const tickers=S.coins.map(c=>'KRW-'+c.ticker.toUpperCase()).join(',');const res=await fetch('https://api.upbit.com/v1/ticker?markets='+encodeURIComponent(tickers));if(!res.ok)throw new Error();const data=await res.json();data.forEach(d=>{livePrice['coin_'+d.market.replace('KRW-','')]={price:d.trade_price,chg:d.signed_change_rate*100};});return true;}catch{return false;}}
-async function fetchGold(){try{const res=await fetch('https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1d&range=1d');if(!res.ok)throw new Error();const data=await res.json();const meta=data?.chart?.result?.[0]?.meta;if(!meta)throw new Error();const priceUSD=meta.regularMarketPrice||meta.previousClose;const prev=meta.chartPreviousClose||meta.previousClose;const chg=prev?((priceUSD-prev)/prev*100):0;let usdkrw=1380;try{const fx=await fetch('https://query1.finance.yahoo.com/v8/finance/chart/USDKRW%3DX?interval=1d&range=1d');if(fx.ok){const fd=await fx.json();const fm=fd?.chart?.result?.[0]?.meta;if(fm)usdkrw=fm.regularMarketPrice||1380;}}catch{}const usdPerDon=priceUSD*(3.75/31.1035);livePrice['gold']={priceUSD,pricePerDon:usdPerDon*usdkrw,chg,usdkrw};updateGoldInfo();return true;}catch{return false;}}
+async function fetchGold(){
+  // Yahoo Finance는 GitHub Pages에서 CORS 차단 → allorigins 프록시 사용
+  const proxy='https://api.allorigins.win/get?url=';
+  try{
+    const goldUrl=encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=1d');
+    const res=await fetch(proxy+goldUrl);
+    if(!res.ok)throw new Error();
+    const wrapper=await res.json();
+    const data=JSON.parse(wrapper.contents);
+    const meta=data?.chart?.result?.[0]?.meta;
+    if(!meta)throw new Error();
+    const priceUSD=meta.regularMarketPrice||meta.previousClose;
+    const prev=meta.chartPreviousClose||meta.previousClose;
+    const chg=prev?((priceUSD-prev)/prev*100):0;
+    // 환율
+    let usdkrw=1380;
+    try{
+      const fxUrl=encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/USDKRW=X?interval=1d&range=1d');
+      const fx=await fetch(proxy+fxUrl);
+      if(fx.ok){const fw=await fx.json();const fd=JSON.parse(fw.contents);const fm=fd?.chart?.result?.[0]?.meta;if(fm)usdkrw=fm.regularMarketPrice||1380;}
+    }catch{}
+    const usdPerDon=priceUSD*(3.75/31.1035);
+    livePrice['gold']={priceUSD,pricePerDon:usdPerDon*usdkrw,chg,usdkrw};
+    updateGoldInfo();
+    return true;
+  }catch{return false;}
+}
 async function fetchStocks(){
   const allTickers=[...new Set([...S.stockLotsKR.map(l=>l.ticker),...S.stockLotsUS.map(l=>l.ticker)])];
   if(!allTickers.length)return false;
+  const proxy='https://api.allorigins.win/get?url=';
   let ok=false;
   for(const tk of allTickers){
-    try{const res=await fetch('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(tk)+'?interval=1d&range=1d');if(!res.ok)throw new Error();const data=await res.json();const meta=data?.chart?.result?.[0]?.meta;if(!meta)throw new Error();const price=meta.regularMarketPrice||meta.previousClose;const prev=meta.chartPreviousClose||meta.previousClose;livePrice['stock_'+tk]={price,chg:prev?((price-prev)/prev*100):0,currency:meta.currency||'KRW'};ok=true;}catch{livePrice['stock_'+tk]={price:null,chg:0,currency:'KRW',error:true};}
+    try{
+      const url=encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${tk}?interval=1d&range=1d`);
+      const res=await fetch(proxy+url);
+      if(!res.ok)throw new Error();
+      const wrapper=await res.json();
+      const data=JSON.parse(wrapper.contents);
+      const meta=data?.chart?.result?.[0]?.meta;
+      if(!meta)throw new Error();
+      const price=meta.regularMarketPrice||meta.previousClose;
+      const prev=meta.chartPreviousClose||meta.previousClose;
+      livePrice['stock_'+tk]={price,chg:prev?((price-prev)/prev*100):0,currency:meta.currency||'KRW'};
+      ok=true;
+    }catch{livePrice['stock_'+tk]={price:null,chg:0,currency:'KRW',error:true};}
   }
   return ok;
 }
 async function fetchAll(){if(fetching)return;fetching=true;const btn=document.getElementById('refresh-btn');if(btn){btn.textContent='로딩...';btn.disabled=true;}setStatus('warn','시세 가져오는 중...');const[a,b,c]=await Promise.all([fetchUpbit(),fetchStocks(),fetchGold()]);const t=new Date();const upd=document.getElementById('last-upd');if(upd)upd.textContent='최종 업데이트: '+t.toLocaleTimeString('ko-KR');setStatus(a||b||c,a||b||c?'실시간 연결 — '+t.toLocaleTimeString('ko-KR'):'API 연결 실패 (자산 없으면 정상)');renderDash();if(btn){btn.textContent='새로고침';btn.disabled=false;}fetching=false;}
-function getCoinVal(c){const p=livePrice['coin_'+c.ticker.toUpperCase()];return p&&p.price?{val:p.price*c.qty,chg:p.chg,live:true,price:p.price}:{val:c.cost,chg:0,live:false,price:null};}
+function getCoinVal(c){
+  // costPerCoin: 1개당 가격 (신규), cost: 총액 (구버전 호환)
+  const costPerCoin=c.costPerCoin!==undefined?c.costPerCoin:(c.cost&&c.qty?Math.round(c.cost/c.qty):0);
+  const totalCost=costPerCoin*c.qty;
+  const p=livePrice['coin_'+c.ticker.toUpperCase()];
+  if(p&&p.price)return{val:p.price*c.qty,chg:p.chg,live:true,price:p.price,costPerCoin,totalCost};
+  return{val:totalCost,chg:0,live:false,price:null,costPerCoin,totalCost};
+}
 function getStockVal(st){const p=livePrice['stock_'+st.ticker];if(p&&p.price){const isUS=p.currency==='USD';const usdkrw=livePrice['gold']?.usdkrw||1380;const priceKRW=isUS?p.price*usdkrw:p.price;return{val:priceKRW,chg:p.chg,live:true,price:p.price,priceKRW,currency:p.currency,usdkrw};}return null;}
 function getGoldVal(){
   const p=livePrice['gold'];
@@ -1668,7 +1735,7 @@ function renderDash(){
   let stockUStotalKRW=0,stockUStotalUSD=0,stockUScostUSD=0;
   usLots.forEach(st=>{const v=getStockVal(st);stockUStotalKRW+=v?v.val*st.qty:st.avgCostUSD*usdkrw*st.qty;stockUStotalUSD+=v?v.price*st.qty:st.avgCostUSD*st.qty;stockUScostUSD+=st.avgCostUSD*st.qty;});
   let coinTotal=0,coinCost=0;
-  S.coins.forEach(c=>{const v=getCoinVal(c);coinTotal+=v.val;coinCost+=c.cost;});
+  S.coins.forEach(c=>{const v=getCoinVal(c);coinTotal+=v.val;coinCost+=v.totalCost;});
 
   const totalInvKRW=goldKRW+stockKRtotal+stockUStotalKRW+coinTotal+savings+estateVal+deposit+usdKRW;
   const totalKRW=cash+totalInvKRW;
@@ -1843,8 +1910,11 @@ function renderInvList(){
   if(S.coins.length){
     html+=`<div style="font-size:11px;color:var(--text3);padding:6px 0 4px;font-weight:500;letter-spacing:.04em;">코인 (KRW)</div>`;
     S.coins.forEach(c=>{
-      const v=getCoinVal(c);const sub=`${c.qty}개${v.price?' · ₩'+Math.round(v.price).toLocaleString():' (오프라인)'}`;
-      html+=assetCard('#E24B4A',c.ticker.toUpperCase(),'<span class="badge badge-live"><span class="live-dot"></span>업비트</span>',v.val,Math.round(v.val/usdkrw),c.cost,sub);
+      const v=getCoinVal(c);
+      const gain=v.val-v.totalCost;
+      const gp=v.totalCost?(gain/v.totalCost*100):0;
+      const sub=`${c.qty}개${v.price?' · ₩'+Math.round(v.price).toLocaleString():' (오프라인)'} · 매수 ${v.costPerCoin?v.costPerCoin.toLocaleString()+'원/개':''}`;
+      html+=assetCard('#E24B4A',c.ticker.toUpperCase(),'<span class="badge badge-live"><span class="live-dot"></span>업비트</span>',v.val,Math.round(v.val/usdkrw),v.totalCost||null,sub);
     });
   }
   // 부동산
