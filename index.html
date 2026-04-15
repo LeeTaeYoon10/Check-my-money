@@ -564,12 +564,28 @@
     <!-- 적금 -->
     <div class="card">
       <div class="card-title">적금 <span id="savings-total-badge" style="font-size:13px;color:var(--green);font-weight:500;"></span></div>
-      <div class="entry-row">
-        <input type="text" id="new-savings-desc" placeholder="항목명 (예: 카카오 자유적금)" style="flex:1.5;">
-        <input type="number" id="new-savings-amt" placeholder="금액 (원)">
+      <div class="note" style="margin-bottom:10px;">이율과 만기일 입력 시 세전/세후 최종 금액을 자동 계산합니다.</div>
+      <div class="entry-row" style="flex-wrap:wrap;">
+        <input type="text" id="new-savings-desc" placeholder="항목명 (예: 카카오 자유적금)" style="flex:1.5;min-width:120px;">
+        <input type="number" id="new-savings-amt" placeholder="현재 납입액 (원)">
+        <input type="number" id="new-savings-rate" placeholder="연 이율 (%)" step="0.01" style="max-width:110px;">
+        <input type="date" id="new-savings-maturity" style="max-width:140px;">
         <button class="btn-add" onclick="addSavingsEntry()">추가</button>
       </div>
       <div id="savings-list"></div>
+    </div>
+
+    <!-- 현물 자산 -->
+    <div class="card">
+      <div class="card-title">현물 자산 <span id="physical-total-badge" style="font-size:13px;color:var(--green);font-weight:500;"></span></div>
+      <div class="note" style="margin-bottom:10px;">악세사리, 차, 도자기 등 실물 자산. 매입가와 현재 예상 가치를 따로 입력합니다.</div>
+      <div class="entry-row" style="flex-wrap:wrap;">
+        <input type="text" id="new-physical-desc" placeholder="항목명 (예: 롤렉스 시계, 제네시스 G80)" style="flex:2;min-width:140px;">
+        <input type="number" id="new-physical-cost" placeholder="매입가 (원)">
+        <input type="number" id="new-physical-val" placeholder="현재 예상 가치 (원)">
+        <button class="btn-add" onclick="addPhysicalEntry()">추가</button>
+      </div>
+      <div id="physical-list"></div>
     </div>
 
     <!-- 금 — 매입 건별 분리 -->
@@ -709,6 +725,7 @@ let S=JSON.parse(localStorage.getItem('assetMgrPro4')||'null')||{
   depositEntries:[],
   usdEntries:[],
   savingsEntries:[],
+  physicalEntries:[],  // 현물 자산: [{id,desc,cost,val}]
   pensionEntries:[],   // 연금 자산: [{id,desc,type,amt}]
   goldEntries:[],
   coins:[],
@@ -728,6 +745,7 @@ if(!S.cashEntries)S.cashEntries=[];
 if(!S.depositEntries)S.depositEntries=[];
 if(!S.usdEntries)S.usdEntries=[];
 if(!S.savingsEntries)S.savingsEntries=[];
+if(!S.physicalEntries)S.physicalEntries=[];
 if(!S.pensionEntries)S.pensionEntries=[];
 if(!S.fixedIncomes)S.fixedIncomes=[];
 if(!S.pensionIncomes)S.pensionIncomes=[];
@@ -1159,9 +1177,51 @@ function delUsdEntry(id){S.usdEntries=S.usdEntries.filter(e=>e.id!==id);save();r
 function totalUsdAmt(){return S.usdEntries.reduce((s,e)=>s+e.usd,0);}
 function totalUsdKRW(){const rate=livePrice['gold']?.usdkrw||1380;return S.usdEntries.reduce((s,e)=>s+e.usd*rate,0);}
 // 적금
-function addSavingsEntry(){const desc=document.getElementById('new-savings-desc').value.trim()||'적금';const amt=+(document.getElementById('new-savings-amt').value)||0;if(!amt)return;S.savingsEntries.push({id:Date.now(),desc,amt});save();['new-savings-desc','new-savings-amt'].forEach(id=>document.getElementById(id).value='');renderAssetsPage();renderDash();}
+// 적금 만기 수익 계산 (단리 기준)
+function calcSavingsMaturity(e){
+  if(!e.rate||!e.maturity)return null;
+  const today=new Date();
+  const matDate=new Date(e.maturity);
+  const months=Math.max(0,Math.round((matDate-today)/(1000*60*60*24*30.44)));
+  const totalMonths=e.startDate?Math.round((matDate-new Date(e.startDate))/(1000*60*60*24*30.44)):12;
+  // 적립식: 월 납입액 × 개월 수 기준 단리 이자
+  const principal=e.amt;
+  const annualRate=e.rate/100;
+  // 만기까지 남은 비율로 예상 원금 추정
+  const interest=Math.round(principal*(annualRate*(totalMonths/12)));
+  const beforeTax=principal+interest;
+  const tax=Math.round(interest*0.154); // 이자소득세 15.4%
+  const afterTax=beforeTax-tax;
+  const daysLeft=Math.max(0,Math.ceil((matDate-today)/(1000*60*60*24)));
+  return{interest,beforeTax,afterTax,tax,daysLeft,matDate};
+}
+function addSavingsEntry(){
+  const desc=document.getElementById('new-savings-desc').value.trim()||'적금';
+  const amt=+(document.getElementById('new-savings-amt').value)||0;
+  const rate=+(document.getElementById('new-savings-rate').value)||0;
+  const maturity=document.getElementById('new-savings-maturity').value||'';
+  if(!amt)return;
+  S.savingsEntries.push({id:Date.now(),desc,amt,rate,maturity});
+  save();
+  ['new-savings-desc','new-savings-amt','new-savings-rate','new-savings-maturity'].forEach(id=>document.getElementById(id).value='');
+  renderAssetsPage();renderDash();
+}
 function delSavingsEntry(id){S.savingsEntries=S.savingsEntries.filter(e=>e.id!==id);save();renderAssetsPage();renderDash();}
 function totalSavings(){return S.savingsEntries.reduce((s,e)=>s+e.amt,0);}
+
+// 현물 자산
+function addPhysicalEntry(){
+  const desc=document.getElementById('new-physical-desc').value.trim()||'현물';
+  const cost=+(document.getElementById('new-physical-cost').value)||0;
+  const val=+(document.getElementById('new-physical-val').value)||0;
+  if(!desc||(!cost&&!val))return;
+  S.physicalEntries.push({id:Date.now(),desc,cost,val:val||cost});
+  save();
+  ['new-physical-desc','new-physical-cost','new-physical-val'].forEach(id=>document.getElementById(id).value='');
+  renderAssetsPage();renderDash();
+}
+function delPhysicalEntry(id){S.physicalEntries=S.physicalEntries.filter(e=>e.id!==id);save();renderAssetsPage();renderDash();}
+function totalPhysical(){return S.physicalEntries.reduce((s,e)=>s+e.val,0);}
 
 // 금 — 매입 건별
 function addGoldEntry(){
@@ -1316,7 +1376,52 @@ function renderAssetsPage(){
   // 적금
   const savTotal=totalSavings();
   document.getElementById('savings-total-badge').textContent=savTotal?fmt(savTotal):'';
-  document.getElementById('savings-list').innerHTML=renderEntryListSimple(S.savingsEntries,'delSavingsEntry',false,'savingsEntry');
+  document.getElementById('savings-list').innerHTML=!S.savingsEntries.length?'<div class="empty" style="padding:0.6rem;">내역이 없습니다</div>':
+    S.savingsEntries.map(e=>{
+      const m=calcSavingsMaturity(e);
+      const rateStr=e.rate?` · 연 ${e.rate}%`:'';
+      const matStr=e.maturity?` · 만기 ${e.maturity}`:'';
+      let matHtml='';
+      if(m){
+        const urgency=m.daysLeft<30?'var(--red)':m.daysLeft<90?'var(--amber)':'var(--text3)';
+        matHtml=`<div style="margin-top:6px;padding:8px 10px;background:var(--bg);border-radius:var(--radius);font-size:12px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="color:var(--text2);">만기까지</span><span style="color:${urgency};font-weight:500;">${m.daysLeft}일 남음</span></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="color:var(--text2);">세전 수령액</span><span style="font-weight:500;">${fmt(m.beforeTax)}</span></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="color:var(--text2);">이자소득세 15.4%</span><span style="color:var(--red);">-${fmt(m.tax)}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:var(--text2);">세후 수령액</span><span style="font-weight:500;color:var(--green);">${fmt(m.afterTax)}</span></div>
+        </div>`;
+      }
+      return `<div class="history-item" style="flex-direction:column;align-items:stretch;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div><span style="font-size:13px;">${e.desc}</span><span style="font-size:11px;color:var(--text3);">${rateStr}${matStr}</span></div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:13px;font-weight:500;color:var(--green);">${fmt(e.amt)}</span>
+            <button class="btn-sm" style="font-size:11px;" onclick="openEditModal('savingsEntry',${e.id})">수정</button>
+            <button class="del-btn" onclick="delSavingsEntry(${e.id})">✕</button>
+          </div>
+        </div>
+        ${matHtml}
+      </div>`;
+    }).join('');
+
+  // 현물 자산
+  const phyTotal=totalPhysical();
+  document.getElementById('physical-total-badge').textContent=phyTotal?fmt(phyTotal):'';
+  document.getElementById('physical-list').innerHTML=!S.physicalEntries.length?'<div class="empty" style="padding:0.6rem;">내역이 없습니다</div>':
+    S.physicalEntries.map(e=>{
+      const gain=e.val-e.cost;const gp=e.cost?(gain/e.cost*100):0;
+      return `<div class="history-item">
+        <div>
+          <div style="font-size:13px;">${e.desc}</div>
+          <div style="font-size:11px;color:var(--text3);">매입가 ${fmt(e.cost)} → 현재 ${fmt(e.val)}</div>
+          ${e.cost?`<div style="font-size:11px;color:${gain>=0?'var(--green)':'var(--red)'};">${gain>=0?'+':''}${fmt(gain)} (${gp.toFixed(1)}%)</div>`:''}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn-sm" style="font-size:11px;" onclick="openEditModal('physical',${e.id})">수정</button>
+          <button class="del-btn" onclick="delPhysicalEntry(${e.id})">✕</button>
+        </div>
+      </div>`;
+    }).join('');
 
   // 금 — 매입 건별 목록
   const goldDonTotal=totalGoldDon();
@@ -1555,7 +1660,7 @@ function getGoldVal(){
 }
 function totalInv(){
   const usdkrw=livePrice['gold']?.usdkrw||1380;
-  let t=totalSavings()+totalDeposit()+totalUsdKRW()+totalGoldKRW()+totalEstateVal()+totalPension();
+  let t=totalSavings()+totalDeposit()+totalUsdKRW()+totalGoldKRW()+totalEstateVal()+totalPension()+totalPhysical();
   S.coins.forEach(c=>t+=getCoinVal(c).val);
   getStockKRLots().forEach(st=>{const v=getStockVal(st);t+=v?v.val*st.qty:st.avgCost*st.qty;});
   getStockUSLots().forEach(st=>{const v=getStockVal(st);t+=v?v.val*st.qty:st.avgCostUSD*usdkrw*st.qty;});
@@ -1705,6 +1810,7 @@ function renderAllocationChart(){
     {label:'코인',val:S.coins.reduce((s,c)=>s+getCoinVal(c).val,0),color:'#E24B4A'},
     {label:'부동산',val:totalEstateVal(),color:'#7F77DD'},
     {label:'연금',val:totalPension(),color:'#BA7517'},
+    {label:'현물',val:totalPhysical(),color:'#E07B54'},
   ].filter(i=>i.val>0);
   const total=items.reduce((s,i)=>s+i.val,0);
   if(!total){leg.innerHTML='<div style="font-size:13px;color:var(--text3);">자산을 입력하세요</div>';return;}
@@ -1918,8 +2024,7 @@ function renderInvList(){
     });
   }
   // 부동산
-  if(S.estateEntries.length){
-    html+=`<div style="font-size:11px;color:var(--text3);padding:6px 0 4px;font-weight:500;letter-spacing:.04em;">부동산</div>`;
+  if(S.estateEntries.length){    html+=`<div style="font-size:11px;color:var(--text3);padding:6px 0 4px;font-weight:500;letter-spacing:.04em;">부동산</div>`;
     S.estateEntries.forEach(e=>{
       const equity=e.val-e.loan;
       html+=`<div class="asset-card"><div class="asset-card-header">
@@ -1927,6 +2032,39 @@ function renderInvList(){
         <div style="text-align:right;"><div class="asset-card-val">${fmt(e.val)}</div>
         ${e.loan?`<div class="asset-card-sub">대출 -${fmt(e.loan)} · 실자산 ${fmt(equity)}</div>`:''}
         </div></div></div>`;
+    });
+  }
+
+  // 적금 만기 임박 알림
+  const urgentSavings=S.savingsEntries.filter(e=>{
+    if(!e.maturity)return false;
+    const d=Math.ceil((new Date(e.maturity)-new Date())/(1000*60*60*24));
+    return d>=0&&d<=90;
+  });
+  if(urgentSavings.length){
+    html+=`<div style="font-size:11px;color:var(--text3);padding:6px 0 4px;font-weight:500;letter-spacing:.04em;">⚠️ 적금 만기 임박</div>`;
+    urgentSavings.forEach(e=>{
+      const d=Math.ceil((new Date(e.maturity)-new Date())/(1000*60*60*24));
+      const m=calcSavingsMaturity(e);
+      html+=`<div class="asset-card"><div class="asset-card-header">
+        <div class="asset-card-name"><span class="asset-dot" style="background:#1D9E75"></span>${e.desc}</div>
+        <div style="text-align:right;"><div class="asset-card-val">${fmt(e.amt)}</div>
+        <div class="asset-card-sub" style="color:${d<30?'var(--red)':'var(--amber)'};">만기 ${d}일 남음${m?` · 세후 ${fmt(m.afterTax)}`:''}</div></div>
+      </div></div>`;
+    });
+  }
+  // 현물 자산
+  if(S.physicalEntries.length){
+    html+=`<div style="font-size:11px;color:var(--text3);padding:6px 0 4px;font-weight:500;letter-spacing:.04em;">현물 자산</div>`;
+    S.physicalEntries.forEach(e=>{
+      const gain=e.val-e.cost;const gp=e.cost?(gain/e.cost*100):0;
+      html+=`<div class="asset-card"><div class="asset-card-header">
+        <div class="asset-card-name"><span class="asset-dot" style="background:#E07B54"></span>${e.desc}</div>
+        <div style="text-align:right;"><div class="asset-card-val">${fmt(e.val)}</div>
+        ${e.cost?`<div class="asset-card-sub">매입가 ${fmt(e.cost)}</div>`:''}
+        </div></div>
+        ${e.cost?`<div class="asset-card-gain" style="color:${gain>=0?'var(--green)':'var(--red)'};">${gain>=0?'+':''}${fmt(gain)} (${gp.toFixed(1)}%)</div>`:''}
+      </div>`;
     });
   }
 
@@ -2132,7 +2270,13 @@ function openEditModal(type, id){
   } else if(type==='savingsEntry'){
     const p=S.savingsEntries.find(e=>e.id===id);if(!p)return;
     titleEl.textContent='적금 수정';
-    bodyEl.innerHTML=`<div class="row2" style="gap:10px;"><div class="fg"><label>항목명</label><input id="em-desc" type="text" value="${p.desc}"></div><div class="fg"><label>금액 (원)</label><input id="em-amt" type="number" value="${p.amt}"></div></div>`;
+    bodyEl.innerHTML=`
+      <div class="fg" style="margin-bottom:10px;"><label>항목명</label><input id="em-desc" type="text" value="${p.desc}"></div>
+      <div class="row3" style="gap:10px;">
+        <div class="fg"><label>납입액 (원)</label><input id="em-amt" type="number" value="${p.amt}"></div>
+        <div class="fg"><label>연 이율 (%)</label><input id="em-rate" type="number" step="0.01" value="${p.rate||0}"></div>
+        <div class="fg"><label>만기일</label><input id="em-maturity" type="date" value="${p.maturity||''}"></div>
+      </div>`;
   } else if(type==='usdEntry'){
     const p=S.usdEntries.find(e=>e.id===id);if(!p)return;
     titleEl.textContent='달러 보유 수정';
@@ -2151,6 +2295,15 @@ function openEditModal(type, id){
           </select>
         </div>
         <div class="fg"><label>적립금 (원)</label><input id="em-amt" type="number" value="${p.amt}"></div>
+      </div>`;
+  } else if(type==='physical'){
+    const p=S.physicalEntries.find(e=>e.id===id);if(!p)return;
+    titleEl.textContent='현물 자산 수정';
+    bodyEl.innerHTML=`
+      <div class="fg" style="margin-bottom:10px;"><label>항목명</label><input id="em-desc" type="text" value="${p.desc}"></div>
+      <div class="row2" style="gap:10px;">
+        <div class="fg"><label>매입가 (원)</label><input id="em-cost" type="number" value="${p.cost||0}"></div>
+        <div class="fg"><label>현재 예상 가치 (원)</label><input id="em-val" type="number" value="${p.val||0}"></div>
       </div>`;
   }
 
@@ -2196,7 +2349,10 @@ function saveEditModal(){
     save();renderAssetsPage();renderDash();
   } else if(type==='savingsEntry'){
     const p=S.savingsEntries.find(e=>e.id===id);if(!p)return;
-    p.desc=v('em-desc')||p.desc;p.amt=n('em-amt');
+    p.desc=v('em-desc')||p.desc;
+    p.amt=n('em-amt');
+    p.rate=n('em-rate');
+    p.maturity=v('em-maturity')||p.maturity;
     save();renderAssetsPage();renderDash();
   } else if(type==='usdEntry'){
     const p=S.usdEntries.find(e=>e.id===id);if(!p)return;
@@ -2207,6 +2363,12 @@ function saveEditModal(){
     p.desc=v('em-desc')||p.desc;
     p.type=v('em-type')||p.type;
     p.amt=n('em-amt');
+    save();renderAssetsPage();renderDash();
+  } else if(type==='physical'){
+    const p=S.physicalEntries.find(e=>e.id===id);if(!p)return;
+    p.desc=v('em-desc')||p.desc;
+    p.cost=n('em-cost');
+    p.val=n('em-val');
     save();renderAssetsPage();renderDash();
   }
   closeEditModal();
@@ -2325,6 +2487,7 @@ async function loadFromFirestore(){
         if(!S.depositEntries)S.depositEntries=[];
         if(!S.usdEntries)S.usdEntries=[];
         if(!S.savingsEntries)S.savingsEntries=[];
+        if(!S.physicalEntries)S.physicalEntries=[];
         if(!S.fixedExpenses)S.fixedExpenses=[];
         if(!S.incomeByMonth)S.incomeByMonth={};
         if(!S.goalAmt)S.goalAmt=0;
