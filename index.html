@@ -1608,26 +1608,15 @@ async function fetchUpbit(){
   for(const c of S.coins){
     const tk=c.ticker.toUpperCase();
     try{
-      // 빗썸 공개 API — CORS 허용
       const res=await fetch(`https://api.bithumb.com/public/ticker/${tk}_KRW`);
       if(!res.ok)throw new Error();
       const data=await res.json();
       if(data.status!=='0000')throw new Error();
       const price=parseFloat(data.data.closing_price);
       const prev=parseFloat(data.data.prev_closing_price||data.data.closing_price);
-      const chg=prev?((price-prev)/prev*100):0;
-      livePrice['coin_'+tk]={price,chg};
+      livePrice['coin_'+tk]={price,chg:prev?((price-prev)/prev*100):0};
       ok=true;
-    }catch{
-      // 빗썸 실패 시 업비트 직접 시도
-      try{
-        const res2=await fetch(`https://api.upbit.com/v1/ticker?markets=KRW-${tk}`);
-        if(!res2.ok)throw new Error();
-        const d=await res2.json();
-        livePrice['coin_'+tk]={price:d[0].trade_price,chg:d[0].signed_change_rate*100};
-        ok=true;
-      }catch{}
-    }
+    }catch{}
   }
   return ok;
 }
