@@ -686,7 +686,13 @@
       <button class="btn-primary" onclick="saveApiKey()">저장</button>
     </div>
     <div class="card">
-      <div class="card-title">Alpha Vantage API 키 <span class="badge badge-live">주식 · 금 · 환율</span></div>
+      <div class="card-title">Finnhub API 키 <span class="badge badge-live">주식 실시간</span></div>
+      <div class="fg" style="margin-bottom:12px;"><label>API 키 (주식 실시간 시세 — 분당 60회)</label><input type="password" id="settings-fh-key" placeholder="Finnhub API 키"></div>
+      <div class="note" style="margin-bottom:12px;">무료 키: <a href="https://finnhub.io" target="_blank" style="color:var(--blue);">finnhub.io →</a></div>
+      <button class="btn-primary" onclick="saveFhKey()">저장</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Alpha Vantage API 키 <span class="badge badge-live">금 · 환율</span></div>
       <div class="fg" style="margin-bottom:12px;"><label>API 키 (주식/금/환율 실시간 시세)</label><input type="password" id="settings-av-key" placeholder="Alpha Vantage API 키"></div>
       <div class="note" style="margin-bottom:12px;">무료 키: <a href="https://alphavantage.co/support/#api-key" target="_blank" style="color:var(--blue);">alphavantage.co →</a> 무료 분당 5회 제한</div>
       <button class="btn-primary" onclick="saveAvKey()">저장</button>
@@ -829,6 +835,8 @@ function getApiKey(){return localStorage.getItem('anthropicKey')||'';}
 function saveApiKey(){const k=document.getElementById('settings-api-key').value.trim();localStorage.setItem('anthropicKey',k);alert('Anthropic API 키가 저장됐습니다.');}
 function getAvKey(){return localStorage.getItem('avKey')||'38ODE1QWN8XL1SXW';}
 function saveAvKey(){const k=document.getElementById('settings-av-key').value.trim();if(k)localStorage.setItem('avKey',k);alert('Alpha Vantage API 키가 저장됐습니다.');fetchAll();}
+function getFhKey(){return localStorage.getItem('fhKey')||'d7jkjs1r01qhf13f7v8gd7jkjs1r01qhf13f7v90';}
+function saveFhKey(){const k=document.getElementById('settings-fh-key').value.trim();if(k)localStorage.setItem('fhKey',k);alert('Finnhub API 키가 저장됐습니다.');fetchAll();}
 function exportData(){const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`asset-backup-${ymNow()}.json`;a.click();}
 function importData(e){const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{try{S=JSON.parse(ev.target.result);save();location.reload();}catch{alert('파일 형식이 올바르지 않습니다.');}};reader.readAsText(file);}
 
@@ -1596,31 +1604,32 @@ const PENSION_TYPE_COLOR={national:'#378ADD',private:'#7F77DD',irp:'#1D9E75'};
 function setStatus(ok,msg){const dot=document.getElementById('status-dot'),txt=document.getElementById('status-text');if(dot)dot.style.background=ok===true?'#1D9E75':ok===false?'#E24B4A':'#BA7517';if(txt)txt.textContent=msg;}
 async function fetchUpbit(){
   if(!(S.coins||[]).length)return false;
-  const tickers=S.coins.map(c=>'KRW-'+c.ticker.toUpperCase()).join(',');
-  const directUrl='https://api.upbit.com/v1/ticker?markets='+encodeURIComponent(tickers);
-  // 프록시 순서대로 시도
-  const attempts=[
-    async()=>{
-      const res=await fetch('https://api.allorigins.win/get?url='+encodeURIComponent(directUrl));
-      if(!res.ok)throw new Error();
-      const w=await res.json();
-      return JSON.parse(w.contents);
-    },
-    async()=>{
-      const res=await fetch(directUrl);
-      if(!res.ok)throw new Error();
-      return res.json();
-    }
-  ];
-  for(const attempt of attempts){
+  let ok=false;
+  for(const c of S.coins){
+    const tk=c.ticker.toUpperCase();
     try{
-      const data=await attempt();
-      if(!Array.isArray(data))continue;
-      data.forEach(d=>{livePrice['coin_'+d.market.replace('KRW-','')]={price:d.trade_price,chg:d.signed_change_rate*100};});
-      return true;
-    }catch{}
+      // 빗썸 공개 API — CORS 허용
+      const res=await fetch(`https://api.bithumb.com/public/ticker/${tk}_KRW`);
+      if(!res.ok)throw new Error();
+      const data=await res.json();
+      if(data.status!=='0000')throw new Error();
+      const price=parseFloat(data.data.closing_price);
+      const prev=parseFloat(data.data.prev_closing_price||data.data.closing_price);
+      const chg=prev?((price-prev)/prev*100):0;
+      livePrice['coin_'+tk]={price,chg};
+      ok=true;
+    }catch{
+      // 빗썸 실패 시 업비트 직접 시도
+      try{
+        const res2=await fetch(`https://api.upbit.com/v1/ticker?markets=KRW-${tk}`);
+        if(!res2.ok)throw new Error();
+        const d=await res2.json();
+        livePrice['coin_'+tk]={price:d[0].trade_price,chg:d[0].signed_change_rate*100};
+        ok=true;
+      }catch{}
+    }
   }
-  return false;
+  return ok;
 }
 async function fetchGold(){
   const AV=getAvKey();
@@ -1659,28 +1668,49 @@ async function fetchGold(){
   }
 }
 async function fetchStocks(){
-  const allTickers=[...new Set([...S.stockLotsKR.map(l=>l.ticker),...S.stockLotsUS.map(l=>l.ticker)])];
-  if(!allTickers.length)return false;
-  const AV=getAvKey();
+  const krTickers=[...new Set(S.stockLotsKR.map(l=>l.ticker))];
+  const usTickers=[...new Set(S.stockLotsUS.map(l=>l.ticker))];
+  if(!krTickers.length&&!usTickers.length)return false;
   let ok=false;
-  // Alpha Vantage: 분당 5회 제한 → 순차 호출 (딜레이 포함)
-  for(let i=0;i<allTickers.length;i++){
-    const tk=allTickers[i];
-    if(i>0)await new Promise(r=>setTimeout(r,12500)); // 12.5초 간격 (분당 5회 안전)
-    try{
-      const res=await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(tk)}&apikey=${AV}`);
+
+  // 🇺🇸 미국주식 — Finnhub (병렬, 분당 60회)
+  if(usTickers.length){
+    const FH=getFhKey();
+    const usResults=await Promise.allSettled(usTickers.map(async tk=>{
+      const res=await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(tk)}&token=${FH}`);
       if(!res.ok)throw new Error();
-      const data=await res.json();
-      const q=data?.['Global Quote'];
-      if(!q||!q['05. price'])throw new Error('no data');
-      const price=parseFloat(q['05. price']);
-      const prev=parseFloat(q['08. previous close']||q['05. price']);
-      const chg=prev?((price-prev)/prev*100):0;
-      // 통화 판별: .KS/.KQ 붙으면 KRW, 아니면 USD
-      const isKR=tk.includes('.KS')||tk.includes('.KQ')||tk.includes('.KS');
-      livePrice['stock_'+tk]={price,chg,currency:isKR?'KRW':'USD'};
-      ok=true;
-    }catch{livePrice['stock_'+tk]={price:null,chg:0,currency:tk.includes('.K')?'KRW':'USD',error:true};}
+      const d=await res.json();
+      if(!d.c||d.c===0)throw new Error('no price');
+      const chg=d.pc?((d.c-d.pc)/d.pc*100):0;
+      livePrice['stock_'+tk]={price:d.c,chg,currency:'USD'};
+    }));
+    usResults.forEach((r,i)=>{
+      if(r.status==='fulfilled')ok=true;
+      else if(!livePrice['stock_'+usTickers[i]])livePrice['stock_'+usTickers[i]]={price:null,chg:0,currency:'USD',error:true};
+    });
+  }
+
+  // 🇰🇷 한국주식 — Alpha Vantage (순차, 분당 5회)
+  if(krTickers.length){
+    const AV=getAvKey();
+    for(let i=0;i<krTickers.length;i++){
+      const tk=krTickers[i];
+      if(i>0)await new Promise(r=>setTimeout(r,13000)); // 13초 간격
+      try{
+        const res=await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(tk)}&apikey=${AV}`);
+        if(!res.ok)throw new Error();
+        const data=await res.json();
+        const q=data?.['Global Quote'];
+        if(!q||!q['05. price'])throw new Error('no data');
+        const price=parseFloat(q['05. price']);
+        const prev=parseFloat(q['08. previous close']||q['05. price']);
+        const chg=prev?((price-prev)/prev*100):0;
+        livePrice['stock_'+tk]={price,chg,currency:'KRW'};
+        ok=true;
+      }catch{
+        if(!livePrice['stock_'+tk])livePrice['stock_'+tk]={price:null,chg:0,currency:'KRW',error:true};
+      }
+    }
   }
   return ok;
 }
@@ -2433,6 +2463,7 @@ function switchTab(id,el){
   if(id==='settings'){
     const k=getApiKey();if(k)document.getElementById('settings-api-key').value=k;
     const av=localStorage.getItem('avKey');if(av)document.getElementById('settings-av-key').value=av;
+    const fh=localStorage.getItem('fhKey');if(fh)document.getElementById('settings-fh-key').value=fh;
   }
 }
 
