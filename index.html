@@ -1113,11 +1113,11 @@ function dTag(day,received){const td=now.getDate();if(received)return '<span cla
 function oTag(day){const td=now.getDate();if(td>=day)return '<span class="tag tag-done">출금완료</span>';return `<span class="tag tag-upcoming">${day}일 출금</span>`;}
 function renderRentPage(){
   const ym=ymNow();
-  document.getElementById('rent-in-list').innerHTML=!S.rentIn.length?'<div class="empty">등록된 받는 월세가 없습니다</div>':S.rentIn.map(p=>{const interest=monthlyInterest(p),received=p.received&&p.received[ym];return `<div class="prop-card type-in"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;"><span style="font-size:14px;font-weight:500;">${p.name}</span><span class="badge badge-in">임대</span>${dTag(p.day,received)}</div><div style="font-size:12px;color:var(--text2);">월세 <b style="color:var(--green);">${fmt(p.amount)}</b> | 매월 ${p.day}일${p.deposit?' | 보증금 '+fmt(p.deposit):''}</div>${interest?`<div style="font-size:12px;color:var(--red);margin-top:2px;">이자 -${fmt(interest)}/월 (연 ${p.loanRate}%)</div>`:''}</div><div style="display:flex;gap:6px;flex-wrap:wrap;"><button onclick="toggleReceived(${p.id},'${ym}')" style="font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;border:0.5px solid ${received?'var(--green)':'var(--border2)'};background:${received?'#E1F5EE':'transparent'};color:${received?'#085041':'var(--text2)'};">${received?'입금확인':'미확인'}</button><button class="btn-sm" style="font-size:11px;" onclick="openEditModal('rentIn',${p.id})">수정</button><button class="del-btn" onclick="deleteRentIn(${p.id})">✕</button></div></div></div>`;}).join('');
+  document.getElementById('rent-in-list').innerHTML=!(S.rentIn||[]).length?'<div class="empty">등록된 받는 월세가 없습니다</div>':S.rentIn.map(p=>{const interest=monthlyInterest(p),received=p.received&&p.received[ym];return `<div class="prop-card type-in"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;"><span style="font-size:14px;font-weight:500;">${p.name}</span><span class="badge badge-in">임대</span>${dTag(p.day,received)}</div><div style="font-size:12px;color:var(--text2);">월세 <b style="color:var(--green);">${fmt(p.amount)}</b> | 매월 ${p.day}일${p.deposit?' | 보증금 '+fmt(p.deposit):''}</div>${interest?`<div style="font-size:12px;color:var(--red);margin-top:2px;">이자 -${fmt(interest)}/월 (연 ${p.loanRate}%)</div>`:''}</div><div style="display:flex;gap:6px;flex-wrap:wrap;"><button onclick="toggleReceived(${p.id},'${ym}')" style="font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;border:0.5px solid ${received?'var(--green)':'var(--border2)'};background:${received?'#E1F5EE':'transparent'};color:${received?'#085041':'var(--text2)'};">${received?'입금확인':'미확인'}</button><button class="btn-sm" style="font-size:11px;" onclick="openEditModal('rentIn',${p.id})">수정</button><button class="del-btn" onclick="deleteRentIn(${p.id})">✕</button></div></div></div>`;}).join('');
   const totalRent=S.rentIn.reduce((s,p)=>s+p.amount,0),totalInterest=S.rentIn.reduce((s,p)=>s+monthlyInterest(p),0),taxInfo=rentTaxEstimate(totalRent*12),netRent=totalRent-totalInterest-taxInfo.monthly,receivedCount=S.rentIn.filter(p=>p.received&&p.received[ym]).length;
-  document.getElementById('rent-in-summary').innerHTML=!S.rentIn.length?'<div class="empty">등록된 받는 월세가 없습니다</div>':`<div style="background:var(--bg2);border-radius:var(--radius);padding:14px;"><div class="sum-row"><span class="sum-label">월세 수입 합계</span><span style="font-weight:500;color:var(--green);">+${fmt(totalRent)}</span></div>${totalInterest?`<div class="sum-row"><span class="sum-label">대출 이자</span><span style="font-weight:500;color:var(--red);">-${fmt(totalInterest)}</span></div>`:''}<div class="sum-row"><span class="sum-label">임대소득세 (월 환산)</span><span style="font-weight:500;color:var(--red);">-${fmt(taxInfo.monthly)}</span></div><div class="sum-row" style="padding-top:8px;"><span style="font-size:13px;font-weight:500;">실수익</span><span style="font-size:15px;font-weight:500;color:var(--green);">${fmt(netRent)}</span></div></div><div style="font-size:12px;color:var(--text2);margin-top:8px;">입금 확인 ${receivedCount}/${S.rentIn.length}건</div>`;
-  document.getElementById('rent-tax-detail').innerHTML=!S.rentIn.length?'<div class="empty">받는 월세를 등록하면 자동 계산됩니다</div>':`<div class="tax-grid"><div class="tax-box"><div class="tax-box-label">연간 임대소득</div><div class="tax-box-val">${fmt(totalRent*12)}</div></div><div class="tax-box"><div class="tax-box-label">과세 유형</div><div class="tax-box-val" style="color:var(--blue);font-size:13px;">${taxInfo.type}</div></div><div class="tax-box"><div class="tax-box-label">연간 세금 추정</div><div class="tax-box-val" style="color:var(--red);">-${fmt(taxInfo.tax)}</div></div><div class="tax-box"><div class="tax-box-label">월 환산 세금</div><div class="tax-box-val" style="color:var(--red);">-${fmt(taxInfo.monthly)}</div></div></div><div style="font-size:12px;color:var(--text2);margin-top:10px;">${taxInfo.detail}</div>`;
-  document.getElementById('rent-out-list').innerHTML=!S.rentOut.length?'<div class="empty">등록된 내는 월세가 없습니다</div>':S.rentOut.map(p=>{const daysLeft=p.end?Math.ceil((new Date(p.end)-now)/(1000*60*60*24)):null;return `<div class="prop-card type-out"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;"><span style="font-size:14px;font-weight:500;">${p.name}</span><span class="badge badge-out">임차</span>${oTag(p.day)}</div><div style="font-size:12px;color:var(--text2);">월세 <b style="color:var(--red);">-${fmt(p.amount)}</b> | 매월 ${p.day}일${p.deposit?' | 보증금 '+fmt(p.deposit):''}</div>${p.end?`<div style="font-size:11px;color:${daysLeft!==null&&daysLeft<60?'var(--red)':'var(--text3)'};margin-top:2px;">계약 만료: ${p.end}${daysLeft!==null?' ('+daysLeft+'일 남음)':''}</div>`:''}</div><div style="display:flex;gap:6px;"><button class="btn-sm" style="font-size:11px;" onclick="openEditModal('rentOut',${p.id})">수정</button><button class="del-btn" onclick="deleteRentOut(${p.id})">✕</button></div></div></div>`;}).join('');
+  document.getElementById('rent-in-summary').innerHTML=!(S.rentIn||[]).length?'<div class="empty">등록된 받는 월세가 없습니다</div>':`<div style="background:var(--bg2);border-radius:var(--radius);padding:14px;"><div class="sum-row"><span class="sum-label">월세 수입 합계</span><span style="font-weight:500;color:var(--green);">+${fmt(totalRent)}</span></div>${totalInterest?`<div class="sum-row"><span class="sum-label">대출 이자</span><span style="font-weight:500;color:var(--red);">-${fmt(totalInterest)}</span></div>`:''}<div class="sum-row"><span class="sum-label">임대소득세 (월 환산)</span><span style="font-weight:500;color:var(--red);">-${fmt(taxInfo.monthly)}</span></div><div class="sum-row" style="padding-top:8px;"><span style="font-size:13px;font-weight:500;">실수익</span><span style="font-size:15px;font-weight:500;color:var(--green);">${fmt(netRent)}</span></div></div><div style="font-size:12px;color:var(--text2);margin-top:8px;">입금 확인 ${receivedCount}/${(S.rentIn||[]).length}건</div>`;
+  document.getElementById('rent-tax-detail').innerHTML=!(S.rentIn||[]).length?'<div class="empty">받는 월세를 등록하면 자동 계산됩니다</div>':`<div class="tax-grid"><div class="tax-box"><div class="tax-box-label">연간 임대소득</div><div class="tax-box-val">${fmt(totalRent*12)}</div></div><div class="tax-box"><div class="tax-box-label">과세 유형</div><div class="tax-box-val" style="color:var(--blue);font-size:13px;">${taxInfo.type}</div></div><div class="tax-box"><div class="tax-box-label">연간 세금 추정</div><div class="tax-box-val" style="color:var(--red);">-${fmt(taxInfo.tax)}</div></div><div class="tax-box"><div class="tax-box-label">월 환산 세금</div><div class="tax-box-val" style="color:var(--red);">-${fmt(taxInfo.monthly)}</div></div></div><div style="font-size:12px;color:var(--text2);margin-top:10px;">${taxInfo.detail}</div>`;
+  document.getElementById('rent-out-list').innerHTML=!(S.rentOut||[]).length?'<div class="empty">등록된 내는 월세가 없습니다</div>':S.rentOut.map(p=>{const daysLeft=p.end?Math.ceil((new Date(p.end)-now)/(1000*60*60*24)):null;return `<div class="prop-card type-out"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;"><span style="font-size:14px;font-weight:500;">${p.name}</span><span class="badge badge-out">임차</span>${oTag(p.day)}</div><div style="font-size:12px;color:var(--text2);">월세 <b style="color:var(--red);">-${fmt(p.amount)}</b> | 매월 ${p.day}일${p.deposit?' | 보증금 '+fmt(p.deposit):''}</div>${p.end?`<div style="font-size:11px;color:${daysLeft!==null&&daysLeft<60?'var(--red)':'var(--text3)'};margin-top:2px;">계약 만료: ${p.end}${daysLeft!==null?' ('+daysLeft+'일 남음)':''}</div>`:''}</div><div style="display:flex;gap:6px;"><button class="btn-sm" style="font-size:11px;" onclick="openEditModal('rentOut',${p.id})">수정</button><button class="del-btn" onclick="deleteRentOut(${p.id})">✕</button></div></div></div>`;}).join('');
   renderRentCalendar();
 }
 
@@ -1359,7 +1359,7 @@ function renderAssetsPage(){
   // 연금
   const penTotal=totalPension();
   document.getElementById('pension-total-badge').textContent=penTotal?fmt(penTotal):'';
-  document.getElementById('pension-list').innerHTML=!S.pensionEntries.length?'<div class="empty" style="padding:0.6rem;">연금 항목이 없습니다</div>':
+  document.getElementById('pension-list').innerHTML=!(S.pensionEntries||[]).length?'<div class="empty" style="padding:0.6rem;">연금 항목이 없습니다</div>':
     S.pensionEntries.map(e=>{const col=PENSION_TYPE_COLOR[e.type]||'#888';return `<div class="history-item">
       <div><span style="font-size:13px;">${e.desc}</span> <span style="font-size:10px;padding:2px 7px;border-radius:4px;background:${col}22;color:${col};">${PENSION_TYPE_LABEL[e.type]||e.type}</span></div>
       <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:13px;font-weight:500;color:var(--green);">${fmt(e.amt)}</span><button class="btn-sm" style="font-size:11px;" onclick="openEditModal('pension',${e.id})">수정</button><button class="del-btn" onclick="delPensionEntry(${e.id})">✕</button></div>
@@ -1411,7 +1411,7 @@ function renderAssetsPage(){
   // 현물 자산
   const phyTotal=totalPhysical();
   document.getElementById('physical-total-badge').textContent=phyTotal?fmt(phyTotal):'';
-  document.getElementById('physical-list').innerHTML=!S.physicalEntries.length?'<div class="empty" style="padding:0.6rem;">내역이 없습니다</div>':
+  document.getElementById('physical-list').innerHTML=!(S.physicalEntries||[]).length?'<div class="empty" style="padding:0.6rem;">내역이 없습니다</div>':
     S.physicalEntries.map(e=>{
       const gain=e.val-e.cost;const gp=e.cost?(gain/e.cost*100):0;
       return `<div class="history-item">
@@ -1435,7 +1435,7 @@ function renderAssetsPage(){
   const goldGp=goldCost?(goldGain/goldCost*100):0;
   document.getElementById('gold-total-badge').textContent=goldDonTotal?`${goldDonTotal}돈 · ${fmt(goldKRW)}`:'';
   const p=livePrice['gold'];
-  document.getElementById('gold-list').innerHTML=!S.goldEntries.length?'<div class="empty" style="padding:0.6rem;">금 매입 내역이 없습니다</div>':
+  document.getElementById('gold-list').innerHTML=!(S.goldEntries||[]).length?'<div class="empty" style="padding:0.6rem;">금 매입 내역이 없습니다</div>':
     S.goldEntries.map(e=>{
       const curVal=p&&p.pricePerDon?Math.round(p.pricePerDon*e.don):e.costPerDon*e.don;
       const cost=e.costPerDon*e.don;const gain=curVal-cost;const gp=cost?(gain/cost*100):0;
@@ -1464,7 +1464,7 @@ function renderAssetsPage(){
 
   // 국내주식 — 로트별 목록
   const krLots=getStockKRLots();
-  document.getElementById('stock-kr-inputs').innerHTML=!S.stockLotsKR.length?'':S.stockLotsKR.map((lot,i)=>`<div class="stock-row" style="font-size:12px;">
+  document.getElementById('stock-kr-inputs').innerHTML=!(S.stockLotsKR||[]).length?'':S.stockLotsKR.map((lot,i)=>`<div class="stock-row" style="font-size:12px;">
     <span style="flex:1;color:var(--text2);">${lot.ticker} ${lot.qty}주 @ ${lot.costPerShare.toLocaleString()}원</span>
     <button class="del-btn" onclick="S.stockLotsKR.splice(${i},1);save();renderAssetsPage();fetchAll();">✕</button>
   </div>`).join('')+
@@ -1472,7 +1472,7 @@ function renderAssetsPage(){
 
   // 미국주식 — 로트별 목록
   const usLots=getStockUSLots();
-  document.getElementById('stock-us-inputs').innerHTML=!S.stockLotsUS.length?'':S.stockLotsUS.map((lot,i)=>`<div class="stock-row" style="font-size:12px;">
+  document.getElementById('stock-us-inputs').innerHTML=!(S.stockLotsUS||[]).length?'':S.stockLotsUS.map((lot,i)=>`<div class="stock-row" style="font-size:12px;">
     <span style="flex:1;color:var(--text2);">${lot.ticker} ${lot.qty}주 @ $${lot.costUSDPerShare}</span>
     <button class="del-btn" onclick="S.stockLotsUS.splice(${i},1);save();renderAssetsPage();fetchAll();">✕</button>
   </div>`).join('')+
@@ -1481,7 +1481,7 @@ function renderAssetsPage(){
   // 부동산 목록
   const estTotal=totalEstateVal();const estLoan=totalEstateLoan();
   document.getElementById('estate-total-badge').textContent=estTotal?`시세 ${fmt(estTotal)} · 대출 ${fmt(estLoan)}`:'';
-  document.getElementById('estate-list').innerHTML=!S.estateEntries.length?'<div class="empty" style="padding:0.6rem;">부동산 항목이 없습니다</div>':
+  document.getElementById('estate-list').innerHTML=!(S.estateEntries||[]).length?'<div class="empty" style="padding:0.6rem;">부동산 항목이 없습니다</div>':
     S.estateEntries.map(e=>{
       const equity=e.val-e.loan;
       const monthlyInt=e.loan&&e.rate?Math.round(e.loan*(e.rate/100)/12):0;
@@ -1497,7 +1497,7 @@ function renderAssetsPage(){
   document.getElementById('debt-total-badge').textContent=debtTotal?`총 ${fmt(debtTotal)}`:'';
   const debtListEl=document.getElementById('debt-list');
   if(debtListEl){
-    debtListEl.innerHTML=!S.debtEntries.length?'<div class="empty" style="padding:0.6rem;">등록된 부채가 없습니다</div>':
+    debtListEl.innerHTML=!(S.debtEntries||[]).length?'<div class="empty" style="padding:0.6rem;">등록된 부채가 없습니다</div>':
       S.debtEntries.map(e=>{
         const monthlyInt=e.rate?Math.round(e.amt*(e.rate/100)/12):0;
         return `<div class="history-item">
@@ -1595,27 +1595,32 @@ const PENSION_TYPE_COLOR={national:'#378ADD',private:'#7F77DD',irp:'#1D9E75'};
 /* ── 시세 ─────────────────────────── */
 function setStatus(ok,msg){const dot=document.getElementById('status-dot'),txt=document.getElementById('status-text');if(dot)dot.style.background=ok===true?'#1D9E75':ok===false?'#E24B4A':'#BA7517';if(txt)txt.textContent=msg;}
 async function fetchUpbit(){
-  if(!S.coins.length)return false;
-  try{
-    const tickers=S.coins.map(c=>'KRW-'+c.ticker.toUpperCase()).join(',');
-    // 업비트 CORS 우회: corsproxy.io 사용
-    const url=`https://corsproxy.io/?https://api.upbit.com/v1/ticker?markets=${encodeURIComponent(tickers)}`;
-    const res=await fetch(url);
-    if(!res.ok)throw new Error();
-    const data=await res.json();
-    data.forEach(d=>{livePrice['coin_'+d.market.replace('KRW-','')]={price:d.trade_price,chg:d.signed_change_rate*100};});
-    return true;
-  }catch{
-    // fallback: 직접 시도
-    try{
-      const tickers=S.coins.map(c=>'KRW-'+c.ticker.toUpperCase()).join(',');
-      const res=await fetch('https://api.upbit.com/v1/ticker?markets='+encodeURIComponent(tickers));
+  if(!(S.coins||[]).length)return false;
+  const tickers=S.coins.map(c=>'KRW-'+c.ticker.toUpperCase()).join(',');
+  const directUrl='https://api.upbit.com/v1/ticker?markets='+encodeURIComponent(tickers);
+  // 프록시 순서대로 시도
+  const attempts=[
+    async()=>{
+      const res=await fetch('https://api.allorigins.win/get?url='+encodeURIComponent(directUrl));
       if(!res.ok)throw new Error();
-      const data=await res.json();
+      const w=await res.json();
+      return JSON.parse(w.contents);
+    },
+    async()=>{
+      const res=await fetch(directUrl);
+      if(!res.ok)throw new Error();
+      return res.json();
+    }
+  ];
+  for(const attempt of attempts){
+    try{
+      const data=await attempt();
+      if(!Array.isArray(data))continue;
       data.forEach(d=>{livePrice['coin_'+d.market.replace('KRW-','')]={price:d.trade_price,chg:d.signed_change_rate*100};});
       return true;
-    }catch{return false;}
+    }catch{}
   }
+  return false;
 }
 async function fetchGold(){
   const AV=getAvKey();
@@ -1984,7 +1989,7 @@ function renderInvList(){
 
 
   // 연금 자산
-  if(S.pensionEntries.length){
+  if((S.pensionEntries||[]).length){
     html+=`<div style="font-size:11px;color:var(--text3);padding:6px 0 4px;font-weight:500;letter-spacing:.04em;">연금</div>`;
     S.pensionEntries.forEach(e=>{
       const col=PENSION_TYPE_COLOR[e.type]||'#888';
@@ -2008,7 +2013,7 @@ function renderInvList(){
   // 예금
   if(deposit>0)html+=assetCard('#5DCAA5','예금','',deposit,Math.round(deposit/usdkrw),null,'');
   // 금 — 건별 표시
-  if(S.goldEntries.length){
+  if((S.goldEntries||[]).length){
     const goldDonTotal=totalGoldDon();const gKRW=totalGoldKRW();const gCost=totalGoldCost();const gGain=gKRW-gCost;const gGainPct=gCost?(gGain/gCost*100):0;
     const pGold=livePrice['gold'];const priceStr=pGold?`${Math.round(pGold.pricePerDon).toLocaleString()}원/돈`:'시세 로딩 중';
     html+=`<div class="asset-card"><div class="asset-card-header">
@@ -2016,7 +2021,7 @@ function renderInvList(){
       <div style="text-align:right;"><div class="asset-card-val">${fmt(gKRW)}</div><div class="asset-card-sub">${goldDonTotal}돈 · ${priceStr}</div></div>
     </div>
     <div class="asset-card-gain" style="color:${gGain>=0?'var(--green)':'var(--red)'};">${gGain>=0?'+':''}${fmt(gGain)} (${gGainPct>=0?'+':''}${gGainPct.toFixed(1)}%)</div>
-    ${S.goldEntries.length>1?`<div style="margin-top:6px;">${S.goldEntries.map(e=>{const cv=pGold?Math.round(pGold.pricePerDon*e.don):e.costPerDon*e.don;const cg=cv-(e.costPerDon*e.don);const cgp=e.costPerDon?(cg/(e.costPerDon*e.don)*100):0;return `<div style="font-size:11px;color:var(--text2);display:flex;justify-content:space-between;padding:2px 0;""><span>${e.desc} (${e.don}돈)</span><span style="color:${cg>=0?'var(--green)':'var(--red)'};">${fmt(cv)} (${cgp>=0?'+':''}${cgp.toFixed(1)}%)</span></div>`;}).join('')}</div>`:''}
+    ${(S.goldEntries||[]).length>1?`<div style="margin-top:6px;">${S.goldEntries.map(e=>{const cv=pGold?Math.round(pGold.pricePerDon*e.don):e.costPerDon*e.don;const cg=cv-(e.costPerDon*e.don);const cgp=e.costPerDon?(cg/(e.costPerDon*e.don)*100):0;return `<div style="font-size:11px;color:var(--text2);display:flex;justify-content:space-between;padding:2px 0;""><span>${e.desc} (${e.don}돈)</span><span style="color:${cg>=0?'var(--green)':'var(--red)'};">${fmt(cv)} (${cgp>=0?'+':''}${cgp.toFixed(1)}%)</span></div>`;}).join('')}</div>`:''}
     </div>`;
   }
   // 국내주식 — 종목별 합산
@@ -2051,7 +2056,7 @@ function renderInvList(){
     });
   }
   // 코인
-  if(S.coins.length){
+  if((S.coins||[]).length){
     html+=`<div style="font-size:11px;color:var(--text3);padding:6px 0 4px;font-weight:500;letter-spacing:.04em;">코인 (KRW)</div>`;
     S.coins.forEach(c=>{
       const v=getCoinVal(c);
@@ -2062,7 +2067,7 @@ function renderInvList(){
     });
   }
   // 부동산
-  if(S.estateEntries.length){    html+=`<div style="font-size:11px;color:var(--text3);padding:6px 0 4px;font-weight:500;letter-spacing:.04em;">부동산</div>`;
+  if((S.estateEntries||[]).length){    html+=`<div style="font-size:11px;color:var(--text3);padding:6px 0 4px;font-weight:500;letter-spacing:.04em;">부동산</div>`;
     S.estateEntries.forEach(e=>{
       const equity=e.val-e.loan;
       html+=`<div class="asset-card"><div class="asset-card-header">
@@ -2092,7 +2097,7 @@ function renderInvList(){
     });
   }
   // 현물 자산
-  if(S.physicalEntries.length){
+  if((S.physicalEntries||[]).length){
     html+=`<div style="font-size:11px;color:var(--text3);padding:6px 0 4px;font-weight:500;letter-spacing:.04em;">현물 자산</div>`;
     S.physicalEntries.forEach(e=>{
       const gain=e.val-e.cost;const gp=e.cost?(gain/e.cost*100):0;
