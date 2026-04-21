@@ -1099,7 +1099,6 @@ function applyRentIncome(){
 /* ── 현금 ─────────────────────────── */
 function addCashEntry(){const desc=document.getElementById('new-cash-desc').value.trim()||'현금';const amt=+(document.getElementById('new-cash-amt').value)||0;if(!amt)return;S.cashEntries.push({id:Date.now(),desc,amt});save();['new-cash-desc','new-cash-amt'].forEach(id=>document.getElementById(id).value='');renderAssetsPage();renderDash();}
 function delCashEntry(id){S.cashEntries=S.cashEntries.filter(e=>e.id!==id);save();renderAssetsPage();renderDash();}
-function totalCash(){return S.cashEntries.reduce((s,e)=>s+e.amt,0);}
 
 /* ── 월세 ─────────────────────────── */
 function switchRentSeg(type,el){document.querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('active'));el.classList.add('active');document.getElementById('rent-in-section').style.display=type==='in'?'block':'none';document.getElementById('rent-out-section').style.display=type==='out'?'block':'none';}
@@ -1175,16 +1174,12 @@ function updateGoldInfo(){
 // 현금
 function addCashEntry(){const desc=document.getElementById('new-cash-desc').value.trim()||'현금';const amt=+(document.getElementById('new-cash-amt').value)||0;if(!amt)return;S.cashEntries.push({id:Date.now(),desc,amt});save();['new-cash-desc','new-cash-amt'].forEach(id=>document.getElementById(id).value='');renderAssetsPage();renderDash();}
 function delCashEntry(id){S.cashEntries=S.cashEntries.filter(e=>e.id!==id);save();renderAssetsPage();renderDash();}
-function totalCash(){return S.cashEntries.reduce((s,e)=>s+e.amt,0);}
 // 예금
 function addDepositEntry(){const desc=document.getElementById('new-deposit-desc').value.trim()||'예금';const amt=+(document.getElementById('new-deposit-amt').value)||0;if(!amt)return;S.depositEntries.push({id:Date.now(),desc,amt});save();['new-deposit-desc','new-deposit-amt'].forEach(id=>document.getElementById(id).value='');renderAssetsPage();renderDash();}
 function delDepositEntry(id){S.depositEntries=S.depositEntries.filter(e=>e.id!==id);save();renderAssetsPage();renderDash();}
-function totalDeposit(){return S.depositEntries.reduce((s,e)=>s+e.amt,0);}
 // 달러
 function addUsdEntry(){const desc=document.getElementById('new-usd-desc').value.trim()||'달러';const usd=+(document.getElementById('new-usd-amt').value)||0;if(!usd)return;S.usdEntries.push({id:Date.now(),desc,usd});save();['new-usd-desc','new-usd-amt'].forEach(id=>document.getElementById(id).value='');renderAssetsPage();renderDash();}
 function delUsdEntry(id){S.usdEntries=S.usdEntries.filter(e=>e.id!==id);save();renderAssetsPage();renderDash();}
-function totalUsdAmt(){return S.usdEntries.reduce((s,e)=>s+e.usd,0);}
-function totalUsdKRW(){const rate=livePrice['gold']?.usdkrw||1380;return S.usdEntries.reduce((s,e)=>s+e.usd*rate,0);}
 // 적금
 // 적금 만기 수익 계산 (단리 기준)
 function calcSavingsMaturity(e){
@@ -1216,7 +1211,6 @@ function addSavingsEntry(){
   renderAssetsPage();renderDash();
 }
 function delSavingsEntry(id){S.savingsEntries=S.savingsEntries.filter(e=>e.id!==id);save();renderAssetsPage();renderDash();}
-function totalSavings(){return S.savingsEntries.reduce((s,e)=>s+e.amt,0);}
 
 // 현물 자산
 function addPhysicalEntry(){
@@ -1229,8 +1223,18 @@ function addPhysicalEntry(){
   ['new-physical-desc','new-physical-cost','new-physical-val'].forEach(id=>document.getElementById(id).value='');
   renderAssetsPage();renderDash();
 }
-function delPhysicalEntry(id){S.physicalEntries=S.physicalEntries.filter(e=>e.id!==id);save();renderAssetsPage();renderDash();}
-function totalPhysical(){return S.physicalEntries.reduce((s,e)=>s+e.val,0);}
+function totalPhysical(){return (S.physicalEntries||[]).reduce((s,e)=>s+e.val,0);}
+function totalSavings(){return (S.savingsEntries||[]).reduce((s,e)=>s+e.amt,0);}
+function totalCash(){return (S.cashEntries||[]).reduce((s,e)=>s+e.amt,0);}
+function totalDeposit(){return (S.depositEntries||[]).reduce((s,e)=>s+e.amt,0);}
+function totalUsdAmt(){return (S.usdEntries||[]).reduce((s,e)=>s+e.usd,0);}
+function totalUsdKRW(){const rate=livePrice['gold']?.usdkrw||1380;return (S.usdEntries||[]).reduce((s,e)=>s+e.usd*rate,0);}
+function totalPension(){return (S.pensionEntries||[]).reduce((s,e)=>s+e.amt,0);}
+function totalGoldDon(){return (S.goldEntries||[]).reduce((s,e)=>s+e.don,0);}
+function totalGoldCost(){return (S.goldEntries||[]).reduce((s,e)=>s+e.costPerDon*e.don,0);}
+function totalGoldKRW(){const p=livePrice['gold'];if(p&&p.pricePerDon)return Math.round(p.pricePerDon*totalGoldDon());return totalGoldCost();}
+function totalEstateVal(){return (S.estateEntries||[]).reduce((s,e)=>s+e.val,0);}
+function totalEstateLoan(){return (S.estateEntries||[]).reduce((s,e)=>s+e.loan,0);}
 
 // 금 — 매입 건별
 function addGoldEntry(){
@@ -1243,13 +1247,6 @@ function addGoldEntry(){
   renderAssetsPage();renderDash();
 }
 function delGoldEntry(id){S.goldEntries=S.goldEntries.filter(e=>e.id!==id);save();renderAssetsPage();renderDash();}
-function totalGoldDon(){return S.goldEntries.reduce((s,e)=>s+e.don,0);}
-function totalGoldKRW(){
-  const p=livePrice['gold'];
-  if(p&&p.pricePerDon)return Math.round(p.pricePerDon*totalGoldDon());
-  return S.goldEntries.reduce((s,e)=>s+e.costPerDon*e.don,0);
-}
-function totalGoldCost(){return S.goldEntries.reduce((s,e)=>s+e.costPerDon*e.don,0);}
 
 // 주식 로트 — 같은 티커 자동 합산
 function getStockKRLots(){
@@ -1316,8 +1313,6 @@ function addEstateEntry(){
   renderAssetsPage();renderDash();
 }
 function delEstateEntry(id){S.estateEntries=S.estateEntries.filter(e=>e.id!==id);save();renderAssetsPage();renderDash();}
-function totalEstateVal(){return S.estateEntries.reduce((s,e)=>s+e.val,0);}
-function totalEstateLoan(){return S.estateEntries.reduce((s,e)=>s+e.loan,0);}
 
 // 부채
 function addDebtEntry(){
@@ -1594,13 +1589,34 @@ function addPensionEntry(){
   renderAssetsPage();renderDash();
 }
 function delPensionEntry(id){S.pensionEntries=S.pensionEntries.filter(e=>e.id!==id);save();renderAssetsPage();renderDash();}
-function totalPension(){return S.pensionEntries.reduce((s,e)=>s+e.amt,0);}
 const PENSION_TYPE_LABEL={national:'국민연금',private:'개인연금',irp:'IRP'};
 const PENSION_TYPE_COLOR={national:'#378ADD',private:'#7F77DD',irp:'#1D9E75'};
 
 /* ── 시세 ─────────────────────────── */
 function setStatus(ok,msg){const dot=document.getElementById('status-dot'),txt=document.getElementById('status-text');if(dot)dot.style.background=ok===true?'#1D9E75':ok===false?'#E24B4A':'#BA7517';if(txt)txt.textContent=msg;}
-async function fetchUpbit(){if(!S.coins.length)return false;try{const tickers=S.coins.map(c=>'KRW-'+c.ticker.toUpperCase()).join(',');const res=await fetch('https://api.upbit.com/v1/ticker?markets='+encodeURIComponent(tickers));if(!res.ok)throw new Error();const data=await res.json();data.forEach(d=>{livePrice['coin_'+d.market.replace('KRW-','')]={price:d.trade_price,chg:d.signed_change_rate*100};});return true;}catch{return false;}}
+async function fetchUpbit(){
+  if(!S.coins.length)return false;
+  try{
+    const tickers=S.coins.map(c=>'KRW-'+c.ticker.toUpperCase()).join(',');
+    // 업비트 CORS 우회: corsproxy.io 사용
+    const url=`https://corsproxy.io/?https://api.upbit.com/v1/ticker?markets=${encodeURIComponent(tickers)}`;
+    const res=await fetch(url);
+    if(!res.ok)throw new Error();
+    const data=await res.json();
+    data.forEach(d=>{livePrice['coin_'+d.market.replace('KRW-','')]={price:d.trade_price,chg:d.signed_change_rate*100};});
+    return true;
+  }catch{
+    // fallback: 직접 시도
+    try{
+      const tickers=S.coins.map(c=>'KRW-'+c.ticker.toUpperCase()).join(',');
+      const res=await fetch('https://api.upbit.com/v1/ticker?markets='+encodeURIComponent(tickers));
+      if(!res.ok)throw new Error();
+      const data=await res.json();
+      data.forEach(d=>{livePrice['coin_'+d.market.replace('KRW-','')]={price:d.trade_price,chg:d.signed_change_rate*100};});
+      return true;
+    }catch{return false;}
+  }
+}
 async function fetchGold(){
   const AV=getAvKey();
   try{
