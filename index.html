@@ -1622,37 +1622,37 @@ async function fetchUpbit(){
 }
 async function fetchGold(){
   const AV=getAvKey();
+  // 환율: open.er-api.com (무료, 무제한, CORS 허용)
+  let usdkrw=1380;
   try{
-    // 환율: USD/KRW
-    let usdkrw=1380;
-    try{
-      const fxRes=await fetch(`https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=USD&to_currency=KRW&apikey=${AV}`);
-      if(fxRes.ok){
-        const fd=await fxRes.json();
-        const rate=fd?.['Realtime Currency Exchange Rate']?.['5. Exchange Rate'];
-        if(rate)usdkrw=parseFloat(rate);
-      }
-    }catch{}
+    const fxRes=await fetch('https://open.er-api.com/v6/latest/USD');
+    if(fxRes.ok){
+      const fd=await fxRes.json();
+      if(fd.rates&&fd.rates.KRW)usdkrw=fd.rates.KRW;
+    }
+  }catch{}
 
-    // 금 시세: XAU/USD (troy oz)
+  // 금 시세: Alpha Vantage XAU/USD
+  try{
     const goldRes=await fetch(`https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=XAU&to_currency=USD&apikey=${AV}`);
     if(!goldRes.ok)throw new Error();
     const gd=await goldRes.json();
+    // 한도 초과 감지
+    if(gd['Note']||gd['Information']){
+      showSyncToast('⚠️ Alpha Vantage 일일 한도 초과 (25회/일). 내일 다시 시도하세요.');
+      livePrice['gold']={...livePrice['gold'],usdkrw};
+      return false;
+    }
     const priceStr=gd?.['Realtime Currency Exchange Rate']?.['5. Exchange Rate'];
     if(!priceStr)throw new Error('no gold price');
     const priceUSD=parseFloat(priceStr);
-    // troy oz → 돈 환산 (1 troy oz = 31.1035g, 1돈 = 3.75g)
     const usdPerDon=priceUSD*(3.75/31.1035);
     livePrice['gold']={priceUSD,pricePerDon:usdPerDon*usdkrw,chg:0,usdkrw};
     updateGoldInfo();
     return true;
-  }catch(e){
-    // 금 시세 실패 시 환율만이라도 시도
-    try{
-      const AV2=getAvKey();
-      const fxRes=await fetch(`https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=USD&to_currency=KRW&apikey=${AV2}`);
-      if(fxRes.ok){const fd=await fxRes.json();const rate=fd?.['Realtime Currency Exchange Rate']?.['5. Exchange Rate'];if(rate){livePrice['gold']={...livePrice['gold'],usdkrw:parseFloat(rate)};}}
-    }catch{}
+  }catch{
+    // 금 실패해도 환율은 저장
+    livePrice['gold']={...livePrice['gold'],usdkrw};
     return false;
   }
 }
@@ -1689,6 +1689,11 @@ async function fetchStocks(){
         const res=await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(tk)}&apikey=${AV}`);
         if(!res.ok)throw new Error();
         const data=await res.json();
+        // 한도 초과 감지
+        if(data['Note']||data['Information']){
+          showSyncToast('⚠️ Alpha Vantage 일일 한도 초과. 한국주식 시세를 가져올 수 없습니다.');
+          break;
+        }
         const q=data?.['Global Quote'];
         if(!q||!q['05. price'])throw new Error('no data');
         const price=parseFloat(q['05. price']);
