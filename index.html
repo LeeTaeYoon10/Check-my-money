@@ -191,7 +191,7 @@
 
   <!-- 대시보드 -->
   <div id="page-dash" class="page active">
-    <div class="status-bar"><span class="status-dot" id="status-dot" style="background:var(--gray)"></span><span id="status-text">초기화 중...</span><button class="btn-sm" id="refresh-btn" onclick="fetchAll()" style="margin-left:auto;">새로고침</button></div>
+    <div class="status-bar"><span class="status-dot" id="status-dot" style="background:var(--gray)"></span><span id="status-text">새로고침 버튼을 눌러 시세를 가져오세요</span><span id="last-upd" style="font-size:11px;color:var(--text3);margin-left:6px;"></span><button class="btn-sm" id="refresh-btn" onclick="fetchAll()" style="margin-left:auto;background:var(--green);color:#fff;border-color:var(--green);font-weight:500;">🔄 시세 새로고침</button></div>
 
     <!-- 구글 로그인 상태 -->
     <div id="auth-bar" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg2);border-radius:var(--radius);margin-bottom:1rem;">
@@ -1288,7 +1288,7 @@ function addCoin(){
   S.coins.push({ticker:tk,qty,costPerCoin});
   save();
   ['new-coin-ticker','new-coin-qty','new-coin-cost'].forEach(id=>{document.getElementById(id).value='';});
-  renderAssetsPage();fetchAll();
+  renderAssetsPage();
 }
 function addStockKR(){
   const tk=(document.getElementById('new-stock-kr-ticker').value||'').trim().toUpperCase();
@@ -1297,7 +1297,7 @@ function addStockKR(){
   if(!tk||!qty)return;
   S.stockLotsKR.push({id:Date.now(),ticker:tk,qty,costPerShare});
   save();['new-stock-kr-ticker','new-stock-kr-qty','new-stock-kr-cost'].forEach(id=>{document.getElementById(id).value='';});
-  renderAssetsPage();fetchAll();
+  renderAssetsPage();
 }
 function addStockUS(){
   const tk=(document.getElementById('new-stock-us-ticker').value||'').trim().toUpperCase();
@@ -1306,7 +1306,7 @@ function addStockUS(){
   if(!tk||!qty)return;
   S.stockLotsUS.push({id:Date.now(),ticker:tk,qty,costUSDPerShare});
   save();['new-stock-us-ticker','new-stock-us-qty','new-stock-us-cost'].forEach(id=>{document.getElementById(id).value='';});
-  renderAssetsPage();fetchAll();
+  renderAssetsPage();
 }
 
 // 부동산 — 여러 개
@@ -1474,7 +1474,7 @@ function renderAssetsPage(){
   const krLots=getStockKRLots();
   document.getElementById('stock-kr-inputs').innerHTML=!(S.stockLotsKR||[]).length?'':S.stockLotsKR.map((lot,i)=>`<div class="stock-row" style="font-size:12px;">
     <span style="flex:1;color:var(--text2);">${lot.ticker} ${lot.qty}주 @ ${lot.costPerShare.toLocaleString()}원</span>
-    <button class="del-btn" onclick="S.stockLotsKR.splice(${i},1);save();renderAssetsPage();fetchAll();">✕</button>
+    <button class="del-btn" onclick="S.stockLotsKR.splice(${i},1);save();renderAssetsPage();">✕</button>
   </div>`).join('')+
   (krLots.length?`<div style="font-size:11px;color:var(--text3);padding:6px 0 2px;">종목별 합산: ${krLots.map(s=>`${s.ticker} 총 ${s.qty}주 (평균 ${s.avgCost.toLocaleString()}원)`).join(' / ')}</div>`:'');
 
@@ -1482,7 +1482,7 @@ function renderAssetsPage(){
   const usLots=getStockUSLots();
   document.getElementById('stock-us-inputs').innerHTML=!(S.stockLotsUS||[]).length?'':S.stockLotsUS.map((lot,i)=>`<div class="stock-row" style="font-size:12px;">
     <span style="flex:1;color:var(--text2);">${lot.ticker} ${lot.qty}주 @ $${lot.costUSDPerShare}</span>
-    <button class="del-btn" onclick="S.stockLotsUS.splice(${i},1);save();renderAssetsPage();fetchAll();">✕</button>
+    <button class="del-btn" onclick="S.stockLotsUS.splice(${i},1);save();renderAssetsPage();">✕</button>
   </div>`).join('')+
   (usLots.length?`<div style="font-size:11px;color:var(--text3);padding:6px 0 2px;">종목별 합산: ${usLots.map(s=>`${s.ticker} 총 ${s.qty}주 (평균 $${s.avgCostUSD})`).join(' / ')}</div>`:'');
 
@@ -2466,8 +2466,10 @@ function switchTab(id,el){
 }
 
 if(!S.goalAmt)S.goalAmt=0;
-renderIncomePage();renderRentPage();renderAssetsPage();renderFixedExpList();renderFixedIncomeList();renderPensionIncList();renderDash();fetchAll();
-setInterval(()=>{if(document.getElementById('page-dash').classList.contains('active'))fetchAll();},30000);
+renderIncomePage();renderRentPage();renderAssetsPage();renderFixedExpList();renderFixedIncomeList();renderPensionIncList();renderDash();
+// 자동 갱신 제거 — 새로고침 버튼 눌렀을 때만 시세 가져옴 (API 한도 절약)
+// 코인(빗썸)은 한도 없으므로 자동 갱신
+setInterval(()=>{if(document.getElementById('page-dash').classList.contains('active'))fetchUpbit().then(()=>renderDash());},30000);
 
 /* ── Firebase 연동 ───────────────── */
 const firebaseConfig={
