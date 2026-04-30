@@ -1672,7 +1672,9 @@ async function fetchStocks(){
   if((krTickers||[]).length){
     const PROXY='https://kr-stock-proxy.tylee3030.workers.dev';
     const results=await Promise.allSettled(krTickers.map(async tk=>{
-      const res=await fetch(`${PROXY}/?ticker=${tk}`);
+      // .KS/.KQ 없으면 붙여서 전달
+      const yahooTicker=tk.includes('.')?tk:(tk+'.KS');
+      const res=await fetch(`${PROXY}/?ticker=${yahooTicker}`);
       if(!res.ok)throw new Error();
       const data=await res.json();
       const meta=data?.chart?.result?.[0]?.meta;
@@ -1680,10 +1682,9 @@ async function fetchStocks(){
       const price=meta.regularMarketPrice;
       const prev=meta.chartPreviousClose||price;
       const chg=prev?((price-prev)/prev*100):0;
-      // tk 그대로 저장 (035720) + .KS 붙인 버전도 함께 저장
+      // 모든 형식으로 저장 (035720, 035720.KS)
       livePrice['stock_'+tk]={price,chg,currency:'KRW'};
-      livePrice['stock_'+tk+'.KS']={price,chg,currency:'KRW'};
-      livePrice['stock_'+tk+'.KQ']={price,chg,currency:'KRW'};
+      livePrice['stock_'+yahooTicker]={price,chg,currency:'KRW'};
       return tk;
     }));
     results.forEach((r,i)=>{
@@ -1692,7 +1693,6 @@ async function fetchStocks(){
         const tk=krTickers[i];
         const err={price:null,chg:0,currency:'KRW',error:true};
         if(!livePrice['stock_'+tk])livePrice['stock_'+tk]=err;
-        if(!livePrice['stock_'+tk+'.KS'])livePrice['stock_'+tk+'.KS']=err;
       }
     });
   }
