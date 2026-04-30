@@ -1668,27 +1668,35 @@ async function fetchStocks(){
     });
   }
 
-  // 🇰🇷 한국주식 — 네이버 모바일 JSON API (여러 프록시 순차 시도)
+  // 🇰🇷 한국주식 — 네이버 금융 쿼리 API
   if((krTickers||[]).length){
     for(const tk of krTickers){
       const code=tk.replace('.KS','').replace('.KQ','');
-      const naverUrl=`https://m.stock.naver.com/api/stock/${code}/basic`;
       let fetched=false;
-      // 프록시 목록
-      const proxies=[
-        `https://corsproxy.io/?${encodeURIComponent(naverUrl)}`,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(naverUrl)}`,
+      const urls=[
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://polling.finance.naver.com/api/realtime/domestic/stock/${code}`)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://finance.naver.com/item/sise_day.naver?code=${code}`)}`,
       ];
-      for(const url of proxies){
+      for(const url of urls){
         try{
-          const res=await fetch(url);
+          const res=await fetch(url,{signal:AbortSignal.timeout(8000)});
           if(!res.ok)continue;
-          const data=await res.json();
-          const price=parseFloat((data.closePrice||'').replace(/,/g,''));
-          if(!price)continue;
-          const chgRate=parseFloat((data.fluctuationsRatio||'0').replace(/[^0-9.\-]/g,''));
-          livePrice['stock_'+tk]={price,chg:chgRate,currency:'KRW'};
-          ok=true;fetched=true;break;
+          const text=await res.text();
+          // polling API 응답 파싱
+          if(text.includes('"now"')){
+            const data=JSON.parse(text);
+            const price=parseFloat(data?.datas?.[0]?.now||data?.now||0);
+            if(!price)continue;
+            const chg=parseFloat(data?.datas?.[0]?.fluctuationRate||0);
+            livePrice['stock_'+tk]={price,chg,currency:'KRW'};
+            ok=true;fetched=true;break;
+          }
+          // HTML 파싱 폴백
+          const match=text.match(/<td[^>]*class="[^"]*num[^"]*"[^>]*>\s*([\d,]+)\s*<\/td>/);
+          if(match){
+            const price=parseFloat(match[1].replace(/,/g,''));
+            if(price){livePrice['stock_'+tk]={price,chg:0,currency:'KRW'};ok=true;fetched=true;break;}
+          }
         }catch{}
       }
       if(!fetched&&!livePrice['stock_'+tk])livePrice['stock_'+tk]={price:null,chg:0,currency:'KRW',error:true};
