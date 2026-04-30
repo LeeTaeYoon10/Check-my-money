@@ -1668,13 +1668,11 @@ async function fetchStocks(){
     });
   }
 
-  // 🇰🇷 한국주식 — Yahoo Finance query2 (CORS 허용 엔드포인트)
+  // 🇰🇷 한국주식 — Cloudflare Worker 프록시 (Yahoo Finance)
   if((krTickers||[]).length){
+    const PROXY='https://kr-stock-proxy.tylee3030.workers.dev';
     const results=await Promise.allSettled(krTickers.map(async tk=>{
-      // query2.finance.yahoo.com은 CORS 허용
-      const res=await fetch(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(tk)}?interval=1d&range=1d`,{
-        headers:{'User-Agent':'Mozilla/5.0'}
-      });
+      const res=await fetch(`${PROXY}/?ticker=${encodeURIComponent(tk)}`);
       if(!res.ok)throw new Error();
       const data=await res.json();
       const meta=data?.chart?.result?.[0]?.meta;
