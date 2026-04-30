@@ -1690,7 +1690,21 @@ async function fetchStocks(){
   }
   return ok;
 }
-async function fetchAll(){if(fetching)return;fetching=true;const btn=document.getElementById('refresh-btn');if(btn){btn.textContent='로딩...';btn.disabled=true;}setStatus('warn','시세 가져오는 중...');const[a,b,c]=await Promise.all([fetchUpbit(),fetchStocks(),fetchGold()]);const t=new Date();const upd=document.getElementById('last-upd');if(upd)upd.textContent='최종 업데이트: '+t.toLocaleTimeString('ko-KR');setStatus(a||b||c,a||b||c?'실시간 연결 — '+t.toLocaleTimeString('ko-KR'):'API 연결 실패 (자산 없으면 정상)');renderDash();if(btn){btn.textContent='새로고침';btn.disabled=false;}fetching=false;}
+async function fetchAll(){
+  if(fetching)return;fetching=true;
+  const btn=document.getElementById('refresh-btn');
+  if(btn){btn.textContent='로딩...';btn.disabled=true;}
+  setStatus('warn','시세 가져오는 중...');
+  const[a,b,c]=await Promise.all([fetchUpbit(),fetchStocks(),fetchGold()]);
+  const t=new Date();
+  const upd=document.getElementById('last-upd');
+  if(upd)upd.textContent='최종 업데이트: '+t.toLocaleTimeString('ko-KR');
+  setStatus(a||b||c,a||b||c?'실시간 연결 — '+t.toLocaleTimeString('ko-KR'):'API 연결 실패 (자산 없으면 정상)');
+  renderDash(); // 시세 반영 후 재렌더
+  renderAssetsPage(); // 자산 탭도 업데이트
+  if(btn){btn.textContent='🔄 시세 새로고침';btn.disabled=false;}
+  fetching=false;
+}
 function getCoinVal(c){
   // costPerCoin: 1개당 가격 (신규), cost: 총액 (구버전 호환)
   const costPerCoin=c.costPerCoin!==undefined?c.costPerCoin:(c.cost&&c.qty?Math.round(c.cost/c.qty):0);
