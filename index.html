@@ -1622,6 +1622,7 @@ async function fetchUpbit(){
 }
 async function fetchGold(){
   const AV=getAvKey();
+
   // 환율: open.er-api.com (무료, 무제한, CORS 허용)
   let usdkrw=1380;
   try{
@@ -1632,26 +1633,29 @@ async function fetchGold(){
     }
   }catch{}
 
-  // 금 시세: Alpha Vantage XAU/USD
+  // 금 시세: GLD ETF (금 1/10 oz 추적) → 실제 금 시세로 역산
+  // GLD 1주 = 금 약 0.0926 troy oz
   try{
-    const goldRes=await fetch(`https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=XAU&to_currency=USD&apikey=${AV}`);
-    if(!goldRes.ok)throw new Error();
-    const gd=await goldRes.json();
-    // 한도 초과 감지
-    if(gd['Note']||gd['Information']){
-      showSyncToast('⚠️ Alpha Vantage 일일 한도 초과 (25회/일). 내일 다시 시도하세요.');
+    const res=await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=GLD&apikey=${AV}`);
+    if(!res.ok)throw new Error();
+    const data=await res.json();
+    if(data['Note']||data['Information']){
+      showSyncToast('⚠️ Alpha Vantage 일일 한도 초과. 설정에서 개인 키를 입력하세요.');
       livePrice['gold']={...livePrice['gold'],usdkrw};
       return false;
     }
-    const priceStr=gd?.['Realtime Currency Exchange Rate']?.['5. Exchange Rate'];
-    if(!priceStr)throw new Error('no gold price');
-    const priceUSD=parseFloat(priceStr);
-    const usdPerDon=priceUSD*(3.75/31.1035);
-    livePrice['gold']={priceUSD,pricePerDon:usdPerDon*usdkrw,chg:0,usdkrw};
+    const q=data?.['Global Quote'];
+    if(!q||!q['05. price'])throw new Error('no GLD price');
+    const gldPrice=parseFloat(q['05. price']); // GLD 주가 (USD)
+    // GLD 1주 = 0.09261 troy oz 금
+    // 금 1 troy oz = GLD / 0.09261
+    const goldPricePerOz=gldPrice/0.09261;
+    // troy oz → 돈 (1돈 = 3.75g, 1 troy oz = 31.1035g)
+    const goldPricePerDon=goldPricePerOz*(3.75/31.1035)*usdkrw;
+    livePrice['gold']={priceUSD:goldPricePerOz,pricePerDon:goldPricePerDon,chg:0,usdkrw};
     updateGoldInfo();
     return true;
   }catch{
-    // 금 실패해도 환율은 저장
     livePrice['gold']={...livePrice['gold'],usdkrw};
     return false;
   }
