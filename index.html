@@ -1668,29 +1668,27 @@ async function fetchStocks(){
     });
   }
 
-  // 🇰🇷 한국주식 — 네이버 폴링 API (allorigins 프록시)
+  // 🇰🇷 한국주식 — Yahoo Finance query2 (CORS 허용 엔드포인트)
   if((krTickers||[]).length){
-    for(const tk of krTickers){
-      const code=tk.replace('.KS','').replace('.KQ','');
-      let fetched=false;
-      const naverUrl=`https://polling.finance.naver.com/api/realtime.nhn?query=SERVICE_ITEM:${code}`;
-      const proxyUrl=`https://api.allorigins.win/raw?url=${encodeURIComponent(naverUrl)}`;
-      try{
-        const res=await fetch(proxyUrl,{signal:AbortSignal.timeout(8000)});
-        if(!res.ok)throw new Error();
-        const text=await res.text();
-        // 응답: {"result":{"areas":[{"datas":[{"cd":"035720","nv":"48450","cv":"450","cr":"0.94",...}]}]}}
-        const data=JSON.parse(text);
-        const item=data?.result?.areas?.[0]?.datas?.[0];
-        if(!item)throw new Error('no item');
-        const price=parseFloat((item.nv||item.sv||'0').replace(/,/g,''));
-        if(!price)throw new Error('no price');
-        const chg=parseFloat(item.cr||0);
-        livePrice['stock_'+tk]={price,chg,currency:'KRW'};
-        ok=true;fetched=true;
-      }catch{}
-      if(!fetched&&!livePrice['stock_'+tk])livePrice['stock_'+tk]={price:null,chg:0,currency:'KRW',error:true};
-    }
+    const results=await Promise.allSettled(krTickers.map(async tk=>{
+      // query2.finance.yahoo.com은 CORS 허용
+      const res=await fetch(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(tk)}?interval=1d&range=1d`,{
+        headers:{'User-Agent':'Mozilla/5.0'}
+      });
+      if(!res.ok)throw new Error();
+      const data=await res.json();
+      const meta=data?.chart?.result?.[0]?.meta;
+      if(!meta)throw new Error();
+      const price=meta.regularMarketPrice||meta.previousClose;
+      const prev=meta.chartPreviousClose||meta.previousClose;
+      const chg=prev?((price-prev)/prev*100):0;
+      livePrice['stock_'+tk]={price,chg,currency:'KRW'};
+      return tk;
+    }));
+    results.forEach((r,i)=>{
+      if(r.status==='fulfilled')ok=true;
+      else if(!livePrice['stock_'+krTickers[i]])livePrice['stock_'+krTickers[i]]={price:null,chg:0,currency:'KRW',error:true};
+    });
   }
   return ok;
 }
