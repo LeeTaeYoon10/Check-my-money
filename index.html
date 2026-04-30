@@ -612,7 +612,7 @@
 
     <!-- 국내주식 — 같은 종목 매입 건별 합산 -->
     <div class="card">
-      <div class="card-title">국내 주식 <span class="badge badge-live"><span class="live-dot"></span>Yahoo Finance</span></div>
+      <div class="card-title">국내 주식 <span class="badge badge-live"><span class="live-dot"></span>네이버 금융</span></div>
       <div class="note" style="margin-bottom:10px;">같은 종목을 여러 번 매수했으면 각각 추가하세요 → 자동으로 평균단가 계산됩니다.</div>
       <div id="stock-kr-inputs"></div>
       <div class="stock-row" style="margin-top:6px;">
@@ -1668,37 +1668,27 @@ async function fetchStocks(){
     });
   }
 
-  // 🇰🇷 한국주식 — 네이버 금융 쿼리 API
+  // 🇰🇷 한국주식 — 네이버 폴링 API (allorigins 프록시)
   if((krTickers||[]).length){
     for(const tk of krTickers){
       const code=tk.replace('.KS','').replace('.KQ','');
       let fetched=false;
-      const urls=[
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://polling.finance.naver.com/api/realtime/domestic/stock/${code}`)}`,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://finance.naver.com/item/sise_day.naver?code=${code}`)}`,
-      ];
-      for(const url of urls){
-        try{
-          const res=await fetch(url,{signal:AbortSignal.timeout(8000)});
-          if(!res.ok)continue;
-          const text=await res.text();
-          // polling API 응답 파싱
-          if(text.includes('"now"')){
-            const data=JSON.parse(text);
-            const price=parseFloat(data?.datas?.[0]?.now||data?.now||0);
-            if(!price)continue;
-            const chg=parseFloat(data?.datas?.[0]?.fluctuationRate||0);
-            livePrice['stock_'+tk]={price,chg,currency:'KRW'};
-            ok=true;fetched=true;break;
-          }
-          // HTML 파싱 폴백
-          const match=text.match(/<td[^>]*class="[^"]*num[^"]*"[^>]*>\s*([\d,]+)\s*<\/td>/);
-          if(match){
-            const price=parseFloat(match[1].replace(/,/g,''));
-            if(price){livePrice['stock_'+tk]={price,chg:0,currency:'KRW'};ok=true;fetched=true;break;}
-          }
-        }catch{}
-      }
+      const naverUrl=`https://polling.finance.naver.com/api/realtime.nhn?query=SERVICE_ITEM:${code}`;
+      const proxyUrl=`https://api.allorigins.win/raw?url=${encodeURIComponent(naverUrl)}`;
+      try{
+        const res=await fetch(proxyUrl,{signal:AbortSignal.timeout(8000)});
+        if(!res.ok)throw new Error();
+        const text=await res.text();
+        // 응답: {"result":{"areas":[{"datas":[{"cd":"035720","nv":"48450","cv":"450","cr":"0.94",...}]}]}}
+        const data=JSON.parse(text);
+        const item=data?.result?.areas?.[0]?.datas?.[0];
+        if(!item)throw new Error('no item');
+        const price=parseFloat((item.nv||item.sv||'0').replace(/,/g,''));
+        if(!price)throw new Error('no price');
+        const chg=parseFloat(item.cr||0);
+        livePrice['stock_'+tk]={price,chg,currency:'KRW'};
+        ok=true;fetched=true;
+      }catch{}
       if(!fetched&&!livePrice['stock_'+tk])livePrice['stock_'+tk]={price:null,chg:0,currency:'KRW',error:true};
     }
   }
@@ -2054,7 +2044,7 @@ function renderInvList(){
       const gain=curVal-costVal;const gp=costVal?(gain/costVal*100):0;
       const sub=`${st.qty}주 · 평균 ${st.avgCost.toLocaleString()}원${v?` · 현재 ${Math.round(v.priceKRW).toLocaleString()}원`:''}`;
       html+=`<div class="asset-card"><div class="asset-card-header">
-        <div class="asset-card-name"><span class="asset-dot" style="background:#378ADD"></span>${st.ticker} <span class="badge badge-live"><span class="live-dot"></span>Yahoo</span></div>
+        <div class="asset-card-name"><span class="asset-dot" style="background:#378ADD"></span>${st.ticker} <span class="badge badge-live"><span class="live-dot"></span>네이버</span></div>
         <div style="text-align:right;"><div class="asset-card-val">${fmt(curVal)}</div><div class="asset-card-sub">${sub}</div></div>
       </div><div class="asset-card-gain" style="color:${gain>=0?'var(--green)':'var(--red)'};">${gain>=0?'+':''}${fmt(gain)} (${gp>=0?'+':''}${gp.toFixed(1)}%)</div></div>`;
     });
