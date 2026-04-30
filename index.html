@@ -1668,26 +1668,30 @@ async function fetchStocks(){
     });
   }
 
-  // 🇰🇷 한국주식 — 네이버 모바일 JSON API (allorigins 프록시)
+  // 🇰🇷 한국주식 — 네이버 모바일 JSON API (여러 프록시 순차 시도)
   if((krTickers||[]).length){
     for(const tk of krTickers){
-      try{
-        const code=tk.replace('.KS','').replace('.KQ','');
-        const naverUrl=`https://m.stock.naver.com/api/stock/${code}/basic`;
-        const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(naverUrl)}`;
-        const res=await fetch(proxy);
-        if(!res.ok)throw new Error();
-        const w=await res.json();
-        const data=JSON.parse(w.contents||'{}');
-        const price=parseFloat((data.closePrice||'').replace(/,/g,''));
-        if(!price)throw new Error('no price');
-        const prev=parseFloat((data.compareToPreviousClosePrice||'0').replace(/,/g,''));
-        const chg=prev&&price?(prev/(price-prev)*100):0;
-        livePrice['stock_'+tk]={price,chg,currency:'KRW'};
-        ok=true;
-      }catch{
-        if(!livePrice['stock_'+tk])livePrice['stock_'+tk]={price:null,chg:0,currency:'KRW',error:true};
+      const code=tk.replace('.KS','').replace('.KQ','');
+      const naverUrl=`https://m.stock.naver.com/api/stock/${code}/basic`;
+      let fetched=false;
+      // 프록시 목록
+      const proxies=[
+        `https://corsproxy.io/?${encodeURIComponent(naverUrl)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(naverUrl)}`,
+      ];
+      for(const url of proxies){
+        try{
+          const res=await fetch(url);
+          if(!res.ok)continue;
+          const data=await res.json();
+          const price=parseFloat((data.closePrice||'').replace(/,/g,''));
+          if(!price)continue;
+          const chgRate=parseFloat((data.fluctuationsRatio||'0').replace(/[^0-9.\-]/g,''));
+          livePrice['stock_'+tk]={price,chg:chgRate,currency:'KRW'};
+          ok=true;fetched=true;break;
+        }catch{}
       }
+      if(!fetched&&!livePrice['stock_'+tk])livePrice['stock_'+tk]={price:null,chg:0,currency:'KRW',error:true};
     }
   }
   return ok;
