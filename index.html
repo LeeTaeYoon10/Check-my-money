@@ -1628,37 +1628,21 @@ async function fetchGold(){
     if(fxRes.ok){const fd=await fxRes.json();if(fd.rates?.KRW)usdkrw=fd.rates.KRW;}
   }catch{}
 
-  // 금 시세: metals-api.com 대신 Finnhub으로 XAU/USD 조회
+  // 금 시세: Finnhub GLD ETF → troy oz 역산 (GLD 1주 ≈ 0.0926 troy oz)
   try{
     const FH=getFhKey();
-    const res=await fetch(`https://finnhub.io/api/v1/forex/candle?symbol=OANDA:XAU_USD&resolution=D&count=2&token=${FH}`);
+    const res=await fetch(`https://finnhub.io/api/v1/quote?symbol=GLD&token=${FH}`);
     if(!res.ok)throw new Error();
-    const data=await res.json();
-    if(data.s==='ok'&&data.c?.length){
-      const priceUSD=data.c[data.c.length-1];
-      const goldPricePerDon=priceUSD*(3.75/31.1035)*usdkrw;
-      livePrice['gold']={priceUSD,pricePerDon:goldPricePerDon,chg:0,usdkrw};
-      updateGoldInfo();
-      return true;
-    }throw new Error('no data');
+    const d=await res.json();
+    if(!d.c||d.c===0)throw new Error();
+    const priceUSD=d.c/0.09261;
+    const goldPricePerDon=priceUSD*(3.75/31.1035)*usdkrw;
+    livePrice['gold']={priceUSD,pricePerDon:goldPricePerDon,chg:0,usdkrw};
+    updateGoldInfo();
+    return true;
   }catch{
-    // Finnhub 실패 시 GLD ETF로 역산 (Finnhub)
-    try{
-      const FH=getFhKey();
-      const res=await fetch(`https://finnhub.io/api/v1/quote?symbol=GLD&token=${FH}`);
-      if(!res.ok)throw new Error();
-      const d=await res.json();
-      if(!d.c||d.c===0)throw new Error();
-      // GLD 1주 ≈ 0.0926 troy oz
-      const priceUSD=d.c/0.09261;
-      const goldPricePerDon=priceUSD*(3.75/31.1035)*usdkrw;
-      livePrice['gold']={priceUSD,pricePerDon:goldPricePerDon,chg:0,usdkrw};
-      updateGoldInfo();
-      return true;
-    }catch{
-      livePrice['gold']={...livePrice['gold'],usdkrw};
-      return false;
-    }
+    livePrice['gold']={...livePrice['gold'],usdkrw};
+    return false;
   }
 }
 async function fetchStocks(){
@@ -1684,7 +1668,7 @@ async function fetchStocks(){
     });
   }
 
-  // 🇰🇷 한국주식 — Finnhub(KRX) 시도 → stooq 폴백
+  // 🇰🇷 한국주식 — Finnhub KRX
   if((krTickers||[]).length){
     const FH=getFhKey();
     for(const tk of krTickers){
@@ -1697,18 +1681,7 @@ async function fetchStocks(){
         livePrice['stock_'+tk]={price:d.c,chg:d.pc?((d.c-d.pc)/d.pc*100):0,currency:'KRW'};
         ok=true;
       }catch{
-        try{
-          const stooqSym=tk.toLowerCase().replace('.ks','.kw').replace('.kq','.kw');
-          const res=await fetch(`https://stooq.com/q/l/?s=${stooqSym}&f=sd2t2ohlcvn&h&e=json`);
-          if(!res.ok)throw new Error();
-          const data=await res.json();
-          const price=parseFloat(data?.symbols?.[0]?.close||0);
-          if(!price)throw new Error();
-          livePrice['stock_'+tk]={price,chg:0,currency:'KRW'};
-          ok=true;
-        }catch{
-          if(!livePrice['stock_'+tk])livePrice['stock_'+tk]={price:null,chg:0,currency:'KRW',error:true};
-        }
+        if(!livePrice['stock_'+tk])livePrice['stock_'+tk]={price:null,chg:0,currency:'KRW',error:true};
       }
     }
   }
