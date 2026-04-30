@@ -1672,20 +1672,28 @@ async function fetchStocks(){
   if((krTickers||[]).length){
     const PROXY='https://kr-stock-proxy.tylee3030.workers.dev';
     const results=await Promise.allSettled(krTickers.map(async tk=>{
-      const res=await fetch(`${PROXY}/?ticker=${encodeURIComponent(tk)}`);
+      const res=await fetch(`${PROXY}/?ticker=${tk}`);
       if(!res.ok)throw new Error();
       const data=await res.json();
       const meta=data?.chart?.result?.[0]?.meta;
-      if(!meta)throw new Error();
-      const price=meta.regularMarketPrice||meta.previousClose;
-      const prev=meta.chartPreviousClose||meta.previousClose;
+      if(!meta||!meta.regularMarketPrice)throw new Error('no price');
+      const price=meta.regularMarketPrice;
+      const prev=meta.chartPreviousClose||price;
       const chg=prev?((price-prev)/prev*100):0;
+      // tk 그대로 저장 (035720) + .KS 붙인 버전도 함께 저장
       livePrice['stock_'+tk]={price,chg,currency:'KRW'};
+      livePrice['stock_'+tk+'.KS']={price,chg,currency:'KRW'};
+      livePrice['stock_'+tk+'.KQ']={price,chg,currency:'KRW'};
       return tk;
     }));
     results.forEach((r,i)=>{
       if(r.status==='fulfilled')ok=true;
-      else if(!livePrice['stock_'+krTickers[i]])livePrice['stock_'+krTickers[i]]={price:null,chg:0,currency:'KRW',error:true};
+      else{
+        const tk=krTickers[i];
+        const err={price:null,chg:0,currency:'KRW',error:true};
+        if(!livePrice['stock_'+tk])livePrice['stock_'+tk]=err;
+        if(!livePrice['stock_'+tk+'.KS'])livePrice['stock_'+tk+'.KS']=err;
+      }
     });
   }
   return ok;
